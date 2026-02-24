@@ -5,7 +5,9 @@ Uses Depth Anything V2 as backbone with a **125-byte φ-arithmetic decoder head*
 
 ## What is this?
 
-Camera feed (left) and depth map (right), running in real-time.
+![phi-depth demo — webcam feed (left) and real-time depth map (right) at 33 FPS](docs/demo.png)
+
+*Live webcam feed (left) alongside the φ-decoded depth map (right), running at 33 FPS on an NVIDIA GPU. The entire decoder is **125 bytes** — smaller than this sentence.*
 
 The φ-decoder replaces DA2's 108KB decoder head with 125 bytes of
 φ-arithmetic weights, achieving 99.99% correlation with the original.
@@ -33,8 +35,8 @@ where φ = (1+√5)/2 is the golden ratio. This gives:
 ## Quick Start
 
 ```bash
-git clone https://github.com/<user>/phi-depth.git
-cd phi-depth
+git clone https://github.com/lostdemeter/dav2_reverse.git
+cd dav2_reverse
 pip install -r requirements.txt
 python phi_depth.py
 ```
@@ -77,6 +79,8 @@ phi-depth/
 ├── weights/
 │   ├── phi_weights.bin        # Standard weights (203 bytes)
 │   └── phi_weights_compact.bin # Compact weights (125 bytes)
+├── docs/
+│   └── demo.png           # Demo screenshot
 └── fit_weights.py         # Optional: re-fit weights from DA2
 ```
 
