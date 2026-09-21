@@ -3,6 +3,28 @@
 Working log for the experimental branch. Kept because several findings
 generalize to adaptation_foundry as a library (flagged LIBRARY below).
 
+## 2026-09-21 — group race: learned ties hand (loop closed, no coronation)
+
+- Raced LEARNED_GROUPS vs JOINT_GROUPS as crossover units, 4 seeds each,
+  style crossover + random mating fixed: HAND hits at 13/16 evals (2/4),
+  LEARNED hits at 14/16 (2/4). Dead heat — seed 4 beats both.
+- Read exactly: the loop closed MECHANICALLY (machine proposal encoded,
+  raced fairly, measured honestly) but proved nothing about superiority.
+  Expected in hindsight: the decompositions differ only in dmax
+  placement, and dmax never varies among survivors — so the two group
+  sets generate nearly the same children. The race was fair; the
+  contrast was thin.
+- What stands: (1) self-modifying search runs end-to-end on this
+  branch — propose-from-data is infrastructure now, not a sketch;
+  (2) the discriminating test needs a space where group structure
+  bites (deeper co-search: analytic kernels, emitter flags, backbone
+  stage selection); (3) the converged-set mechanism ([dmax] flagged
+  constant) is arguably the more valuable output — it tells you which
+  dimensions NOT to spend trials on.
+- LIBRARY: report ties as ties. A 2/4-vs-2/4 with a good story attached
+  is how Kadmon-type overclaiming starts. The receipt here is the loop,
+  not a leaderboard.
+
 ## 2026-09-21 — the proposer closes one loop (learned groups ≈ hand groups)
 
 - `learn_groups` (MI + agglomerative over top-half histories, converged

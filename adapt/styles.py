@@ -285,20 +285,34 @@ def crossover_joint_flat(rng, a, b):
     return validate_joint({"arch": arch, "width": width})
 
 
-def style_crossover_joint(rng, a, b):
+def style_crossover_joint(rng, a, b, groups=None):
     """Group-level crossover over CROSS-DSL groups: co-adapted
-    structure+table bundles travel together."""
+    structure+table bundles travel together. groups defaults to the
+    hand-drawn JOINT_GROUPS; pass the learn_groups() output to race
+    machine-proposed decompositions (the loop closing one turn)."""
     import copy
     va, vb = validate_joint(a), validate_joint(b)
     flat_a = {**va["arch"], **va["width"]}
     flat_b = {**vb["arch"], **vb["width"]}
     out = {}
-    for group in JOINT_GROUPS:
+    for group in (groups if groups is not None else JOINT_GROUPS):
         src = flat_a if rng.random() < 0.5 else flat_b
         for k in group:
             out[k] = copy.deepcopy(src[k])
     return validate_joint({"arch": {k: out[k] for k in ARCH_KEYS},
                            "width": {k: out[k] for k in WIDTH_KEYS}})
+
+
+# Machine-proposed decomposition from learn_groups() over 107 evaluated
+# genotypes (6 co-search runs, NOTES 2026-09-21): identical to JOINT_GROUPS
+# on 3/4 groups; dmax flagged converged (constant among winners), kept as
+# a singleton so crossover covers all 11 keys. One dataset's output —
+# raced here, not canonized.
+LEARNED_GROUPS = (("accum", "block_gains", "dropped", "head"),
+                  ("exp_span", "frac_cap"),
+                  ("readout", "taps"),
+                  ("res_scales", "tap_gains"),
+                  ("dmax",))
 
 
 def phase_mate_select(rng, sigs, anchor, k=3, exploit_p=0.7):

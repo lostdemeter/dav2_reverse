@@ -58,11 +58,15 @@ def main():
     ap.add_argument('--mate', choices=("random", "phase"), default="random",
                     help="second-parent choice: uniform random mating vs "
                          "phase-neighborhood mating (geometric proposer)")
+    ap.add_argument('--groups', choices=("hand", "learned"), default="hand",
+                    help="crossover unit decomposition: hand-drawn JOINT_GROUPS "
+                         "vs machine-proposed LEARNED_GROUPS (style mode only)")
     args = ap.parse_args()
 
     import torch
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"device: {device} mode={args.mode}", flush=True)
+    print(f"device: {device} mode={args.mode} mate={args.mate} "
+          f"groups={args.groups}", flush=True)
     shared_w, fx_w, probe = W.load_all(device)
     shared_a = load_arch_shared(device)
     arch_fx = load_arch_fx(include_audit=False)
@@ -144,8 +148,9 @@ def main():
                        key=lambda i: (-scores[i][0], scores[i][1]))
         elites = [pop[i] for i in order[:2]]
         children = []
-        cross = (S.style_crossover_joint if args.mode == "style"
-                 else S.crossover_joint_flat)
+        grp = S.LEARNED_GROUPS if args.groups == "learned" else None
+        cross = (lambda rng_, x, y: S.style_crossover_joint(rng_, x, y, grp)
+                 if args.mode == "style" else S.crossover_joint_flat)
         while len(elites) + len(children) < args.pop:
             a, b = rng.sample(range(len(pop)), 2)
             ai = a if order.index(a) <= order.index(b) else b
@@ -206,11 +211,13 @@ def main():
             for v in cache.values()]
     (runs / f'cohistory_{args.mode}_{args.mate}_{args.seed}.json').write_text(
         json.dumps(hist, indent=0, default=str))
-    (runs / f'cosearch_{args.mode}_{args.seed}.json').write_text(json.dumps(
-        {"mode": args.mode, "winners": bool(winners),
+    (runs / f'cosearch_{args.mode}_{args.mate}_{args.groups}_{args.seed}.json'
+     ).write_text(json.dumps(
+        {"mode": args.mode, "mate": args.mate, "groups": args.groups,
+         "winners": bool(winners),
          "first_hit": first_hit, "best": audit_cfg,
          "unique_evals": len(cache), "seconds": dt}, indent=1, default=str))
-    print(f"wrote adapt/runs/cosearch_{args.mode}_{args.seed}.json")
+    print(f"wrote adapt/runs/cosearch_{args.mode}_{args.mate}_{args.groups}_{args.seed}.json")
     return 0 if winners else 1
 
 
