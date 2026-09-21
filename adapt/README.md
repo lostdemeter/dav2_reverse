@@ -60,6 +60,18 @@ cost of unbounded ints (firmware needs the theory's multi-limb solver).
 Taylor is table-free but its 2–9% single-add error compounds to garbage
 over 32-deep chains — evidence against table-free for this workload.
 
+## Graduation experiment (`python adapt/graduate.py`)
+
+Known-answer test for the efficiency objective: seed full tables,
+search LUT widths (+accumulator) with `EfficiencyRule`, expect the
+Pareto 576 kB point. Run 2026-09-21: trials 3–4 PROMOTED
+(`efficiency_gain_bytes`) — then OVERSHOT to {2048,8,4096} (552 kB),
+because real features pass 0.999 where Pareto's random features read
+0.977. Audit shows the price (0.9948–0.9979 vs seed's 0.9988–1.0).
+Rejections all correct: exp→4 dies on the softmax probe, dmax→1024 and
+accum→fixed both lose retention-0. Details + library lessons in
+`adapt/NOTES.md`.
+
 ## LUT-width Pareto (`python adapt/lut_pareto.py`)
 
 FRAC_CAP × EXP span × ADD/SUB DMAX vs head/conv/softmax corr + shippable
