@@ -31,9 +31,16 @@ HEADS = ("geo-conv", "direct", "analytic")
 # so pyramid roles (x4up/x2up/identity/x2down) stay sane.
 TAP_BANDS = ((2, 3, 4), (5, 6, 7), (8, 9, 10), (11, 12))
 GAIN_LO, GAIN_HI = -1, 1
+# Per-block output gains (attn0,mlp0,attn1,mlp1,...): the learnable backbone
+# weights. NOT 22M params — 24 residual-mixing scalars as phi exponents.
+# Uniform weight scaling is absorbed by LayerNorm; these output gains survive
+# it and are free exponent adds in the integer datapath.
+BGAIN_LO, BGAIN_HI = -2, 2
+N_BGAINS = 24
 
 SEED_CONFIG = {"readout": 3, "res_scales": [0, 0, 0, 0], "head": "geo-conv",
-               "taps": [3, 6, 9, 12], "tap_gains": [0, 0, 0, 0]}
+               "taps": [3, 6, 9, 12], "tap_gains": [0, 0, 0, 0],
+               "block_gains": [0] * N_BGAINS}
 
 
 def validate_config(cfg):
@@ -41,7 +48,7 @@ def validate_config(cfg):
     if not isinstance(cfg, dict):
         raise ValueError("config must be an object")
     keys = set(cfg)
-    want_keys = {"readout", "res_scales", "head", "taps", "tap_gains"}
+    want_keys = {"readout", "res_scales", "head", "taps", "tap_gains", "block_gains"}
     if keys != want_keys:
         raise ValueError(f"config keys must be exactly {sorted(want_keys)}, got {sorted(keys)}")
     readout = cfg["readout"]
@@ -66,8 +73,12 @@ def validate_config(cfg):
     if (not isinstance(gains, list) or len(gains) != 4
             or any(type(v) is not int or not GAIN_LO <= v <= GAIN_HI for v in gains)):
         raise ValueError(f"tap_gains must be 4 ints in [{GAIN_LO},{GAIN_HI}]")
+    bg = cfg["block_gains"]
+    if (not isinstance(bg, list) or len(bg) != N_BGAINS
+            or any(type(v) is not int or not BGAIN_LO <= v <= BGAIN_HI for v in bg)):
+        raise ValueError(f"block_gains must be {N_BGAINS} ints in [{BGAIN_LO},{BGAIN_HI}]")
     return {"readout": readout, "res_scales": list(scales), "head": cfg["head"],
-            "taps": list(taps), "tap_gains": list(gains)}
+            "taps": list(taps), "tap_gains": list(gains), "block_gains": list(bg)}
 
 
 def neighbor_configs(cfg):
@@ -102,6 +113,15 @@ def neighbor_configs(cfg):
                 gains[i] = nv
                 c = dict(cfg, tap_gains=gains)
                 out.append((c, f"tap {i} gain xphi^{nv} (free in integer datapath)", 26))
+    for i, v in enumerate(cfg["block_gains"]):
+        for d in (-1, 1):
+            nv = v + d
+            if BGAIN_LO <= nv <= BGAIN_HI:
+                bg = list(cfg["block_gains"])
+                bg[i] = nv
+                c = dict(cfg, block_gains=bg)
+                kind = "attn" if i % 2 == 0 else "mlp"
+                out.append((c, f"backbone L{i // 2} {kind} out xphi^{nv}", 28))
     for i, v in enumerate(cfg["res_scales"]):
         for d in (-1, 1):
             nv = v + d
@@ -138,13 +158,13 @@ class ScaledNeckMixin:
         return hidden
 
 
-def _backbone_tapped(backbone, preprocess, device, rgb, taps, gains):
+def _backbone_tapped(backbone, preprocess, device, rgb, taps, gains, bgains=None):
     """Backbone stages at tap layers with phi-power gains. Returns fmaps, ph, pw."""
     import torch
     from geo_lut import PHI
     pv = preprocess(rgb).to(device)
     with torch.no_grad():
-        fmaps, ph, pw = backbone.forward_stages(pv, taps=taps)
+        fmaps, ph, pw = backbone.forward_stages(pv, taps=taps, bgains=bgains)
     out = []
     for fm, g in zip(fmaps, gains):
         out.append(fm * float(PHI ** g) if g else fm)
@@ -180,7 +200,8 @@ def run_pipeline(shared, config, rgb_list, fit_explore=None):
             continue
         fmaps, ph, pw = _backbone_tapped(
             backbone, preprocess, device, rgb,
-            config['taps'], config['tap_gains'])
+            config['taps'], config['tap_gains'],
+            config['block_gains'])
         with torch.no_grad():
             fused = neck(fmaps)
             h = fused[config['readout']]
@@ -242,7 +263,8 @@ def fit_direct_head(shared, config, explore):
     for rgb, ref, _cid in explore:
         fmaps, ph, pw = _backbone_tapped(
             backbone, preprocess, device, rgb,
-            config['taps'], config['tap_gains'])
+            config['taps'], config['tap_gains'],
+            config['block_gains'])
         with torch.no_grad():
             fused = neck(fmaps)
             h = fused[config['readout']]
@@ -298,9 +320,11 @@ class DepthAdapter:
         base = validate_config(incumbent.config)
         tried = set(tried)
         for cfg, rationale, _prio in neighbor_configs(base):
+            bg = ''.join('m' if v == -2 else 'n' if v == -1 else str(v)
+                         if v in (0, 1) else 'p' for v in cfg['block_gains'])
             name = (f"r{cfg['readout']}-t{''.join(map(str, cfg['taps']))}"
                     f"-g{''.join(map(str, cfg['tap_gains']))}"
-                    f"-s{''.join(map(str, cfg['res_scales']))}-{cfg['head']}")
+                    f"-b{bg}-s{''.join(map(str, cfg['res_scales']))}-{cfg['head']}")
             spec = TrialSpec(name, cfg, rationale)
             if spec.identifier not in tried:
                 return spec

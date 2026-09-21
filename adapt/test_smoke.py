@@ -31,6 +31,9 @@ for bad in ({}, dict(_good, readout=9),
             dict(_good, taps=[3, 6, 6, 12]),
             dict(_good, taps=[4, 3, 9, 12]),
             dict(_good, tap_gains=[0, 0, 0, 2]),
+            dict(_good, block_gains=[0] * 23),
+            dict(_good, block_gains=[0] * 24 + [0]),
+            dict(_good, block_gains=[0] * 23 + [3]),
             dict(_good, extra=1)):
     try:
         validate_config(dict(bad))
@@ -39,7 +42,7 @@ for bad in ({}, dict(_good, readout=9),
         check(True, f"rejects {list(bad)[-1] if bad else '{}'}")
 
 moves = neighbor_configs(seed)
-check(len(moves) == 2 + 3 + 8 + 7 + 8, f"seed has 28 neighbors (got {len(moves)})")
+check(len(moves) == 2 + 3 + 8 + 7 + 8 + 48, f"seed has 76 neighbors (got {len(moves)})")
 specs = [TrialSpec(f"m{i}", dict(c), r) for i, (c, r, _p) in enumerate(moves)]
 check(len({s.identifier for s in specs}) == len(specs), "neighbor identifiers unique")
 check(all(validate_config(dict(s.config)) == dict(s.config) for s in specs),

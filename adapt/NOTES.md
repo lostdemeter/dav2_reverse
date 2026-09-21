@@ -207,3 +207,27 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   changes. Byte deltas near zero should be treated as zero before any
   efficiency reasoning touches them — a tolerance the EfficiencyRule
   doesn't have yet. Logged as the next rule refinement.
+
+## 2026-09-21 — backbone weights learned (24 block gains), exhaustion
+
+- Scope, stated first: NOT 22M-param fine-tuning (out of framework,
+  out of data, out of thesis). The learnable surface is 24 per-block
+  output gains (12 attn + 12 mlp) as phi exponents in [-2,2] — the
+  residual-stream mixing ratios. Uniform weight scaling would be
+  absorbed by LayerNorm; output gains survive it, and ship free as
+  exponent adds. `forward_stages` takes optional `bgains`; default path
+  verified bit-identical. DSL v3, 76 seed neighbors.
+- 77-trial run to `proposal_space_exhausted` (22s), incumbent retained
+  (all-zeros). Every single gain move (±1, all 24 blocks) fails the
+  0.999 bar — but the follow-up measurement matters more than the
+  verdicts: L0-attn×φ collapses to 0.47 mean, L6-attn×φ to 0.78,
+  L11-mlp×φ degrades gracefully to 0.994. Sensitivity DECREASES with
+  depth: early layers set coordinates everything downstream uses, late
+  MLP tweaks are absorbable. That is evidence about DINOv2's residual
+  structure, not just gate output.
+- The seed itself sits at min 0.99901 / mean 0.99956 on exploration —
+  the bar is at the seed's floor, so all these verdicts are razor
+  thin. Another vote for margin-aware comparison in the base rule
+  (built for efficiency, still absent here). Binary verdicts keep
+  aliasing "slightly worse" with "garbage"; the post-hoc corr
+  measurements above are doing the work the scorecards can't.

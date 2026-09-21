@@ -74,16 +74,22 @@ class GeometricDinov2Backbone(torch.nn.Module):
     def _g(self, name: str) -> torch.Tensor:
         return self._w[name]
 
-    def forward_stages(self, pixel_values: torch.Tensor, taps=None):
+    def forward_stages(self, pixel_values: torch.Tensor, taps=None, bgains=None):
         """
         Args: pixel_values [B,3,H,W] float32.
               taps: 1-indexed layer numbers to tap (default OUT_STAGES).
+              bgains: 24 phi-exponent ints (attn0,mlp0,attn1,mlp1,...) scaling
+                block outputs before the layer-scale residual add. None = exact.
+                Uniform weight scaling would be absorbed by LayerNorm; these
+                output gains survive it by changing residual mixing ratios.
         Returns: list of feature maps [B,384,H/14,W/14] in tap order,
                  plus patch_h, patch_w.
         """
         assert self.buffers_loaded, "call load_geometric() first"
         want = tuple(taps) if taps is not None else OUT_STAGES
         assert all(1 <= t <= LAYERS for t in want), f"taps out of range: {want}"
+        if bgains is not None:
+            assert len(bgains) == 2 * LAYERS, f"bgains needs {2 * LAYERS} ints"
         B, _, H, W = pixel_values.shape
         x = pixel_values.to(self.device)
         ph, pw = H // PATCH, W // PATCH
@@ -130,6 +136,8 @@ class GeometricDinov2Backbone(torch.nn.Module):
             attn = attn.softmax(dim=-1)
             o = (attn @ v).transpose(1, 2).contiguous().view(B, -1, D)
             o = F.linear(o, self._g(p + 'proj.weight'), self._g(p + 'proj.bias'))
+            if bgains is not None and bgains[2 * li]:
+                o = o * float(PHI ** bgains[2 * li])
             ls1 = self._g(p + 'ls1')
             # layer_scale lambda is [384] — broadcast over B,N
             x = x + o * ls1
@@ -138,6 +146,8 @@ class GeometricDinov2Backbone(torch.nn.Module):
             h2 = F.linear(h2, self._g(p + 'mlp1.weight'), self._g(p + 'mlp1.bias'))
             h2 = F.gelu(h2)
             h2 = F.linear(h2, self._g(p + 'mlp2.weight'), self._g(p + 'mlp2.bias'))
+            if bgains is not None and bgains[2 * li + 1]:
+                h2 = h2 * float(PHI ** bgains[2 * li + 1])
             ls2 = self._g(p + 'ls2')
             x = x + h2 * ls2
             if (li + 1) in want:

@@ -31,6 +31,10 @@ branch and does not touch `main` or the upstream foundry repo.
   stages (bands per position, strictly increasing; seed is HF's 3/6/9/12).
 - `tap_gains` — four ints in [-1, 1]: `×φ^e` gain per tapped stage
   (free as an exponent add in the integer datapath).
+- `block_gains` — 24 ints in [-2, 2] (attn0,mlp0,attn1,mlp1,…): learned
+  backbone mixing ratios. Searched to exhaustion (77 trials): all moves
+  rejected, with measured sensitivity decreasing with depth (L0-attn×φ
+  → 0.47, L11-mlp×φ → 0.994). See NOTES.
 
 Seed = exact replication. `propose()` enumerates single moves
 (readout±1, one scale ±1, head flip) with rationale; the core's
