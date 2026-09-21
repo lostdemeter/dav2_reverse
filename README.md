@@ -164,7 +164,11 @@ LUT-only decode).
 `geo_int.IntegerPhiHead` proves the accumulation core on the 32-wide
 depth head: integer-head vs float-head corr=0.999751, ~29 µs/px in a
 pure-Python int loop (~8 s/frame at 518² — a Numba/C port per the
-`jit_phi_matmul.py` precedent would bring 100–1000×). Honest boundaries:
+`jit_phi_matmul.py` precedent would bring 100–1000×). `int_conv2d`
+extends this to neck convolutions (1×1, 3×3, bias, ReLU, all
+integer-chained with tree reduction to bound LUT-rounding error):
+reassemble-proj corr=0.999920, chained 3×3 corr=0.999877, chained
+fusion-conv+ReLU corr=0.999663 (`python geo_int.py`). Honest boundaries:
 feature *encoding* (float→int) and final decode-for-display still use
 floats — on FPU-free hardware the sensor front-end would emit
 fixed-point ints with an integer encode LUT (future work), as would the
