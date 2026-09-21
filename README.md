@@ -1,237 +1,202 @@
-# phi-depth: Real-Time Depth Estimation from Webcam
+# dav2_reverse: Fully-Geometric Depth Anything V2
 
-Real-time monocular depth estimation using a USB webcam.
-Uses Depth Anything V2 as backbone with a **125-byte φ-arithmetic decoder head**.
+A complete reverse-engineering of Depth Anything V2 (Small) into
+φ-arithmetic: **backbone + neck + head**, every weight stored as
+`sign × φ^((exponent − 32768) / 512)`, runnable on GPU, on CPU with no
+GPU at all, and — via the integer datapath — on hardware with **no
+floating-point unit**.
 
-## What is this?
-
-![phi-depth demo — webcam feed (left) and real-time depth map (right) at 33 FPS](docs/demo.png)
-
-*Live webcam feed (left) alongside the φ-decoded depth map (right), running at 33 FPS on an NVIDIA GPU. The entire decoder is **125 bytes** — smaller than this sentence.*
-
-The φ-decoder replaces DA2's 108KB decoder head with 125 bytes of
-φ-arithmetic weights, achieving 99.99% correlation with the original.
-
-| Component | Size |
-|-----------|------|
-| DA2 backbone (ViT-S) | 94 MB (downloaded automatically) |
-| φ-decoder weights | **125 bytes** |
-| Correlation with full DA2 | 99.99% |
-
-## How it works
-
-DA2's decoder head is a linear projection from 32 features to depth.
-We represent this projection using φ-exponent arithmetic:
-
-```
-value = sign × φ^(exponent / k)
-```
-
-where φ = (1+√5)/2 is the golden ratio. This gives:
-- Multiplication via exponent addition (no floating-point multiply)
-- Equal relative precision at all scales
-- **756,400× compression** vs the full model
-
-## Quick Start
-
-```bash
-git clone https://github.com/lostdemeter/dav2_reverse.git
-cd dav2_reverse
-pip install -r requirements.txt
-python phi_depth.py
-```
-
-First run downloads the DA2 backbone (~94 MB) from HuggingFace.
-
-## Controls
-
-| Key | Action |
-|-----|--------|
-| M   | Cycle colormap (magma → viridis → plasma → inferno → turbo) |
-| S   | Save frame to `./captures/` |
-| X   | Quit |
-
-## Requirements
-
-- Python 3.8+
-- USB webcam
-- GPU recommended (CPU works but slower)
-
-## Re-fitting weights (optional)
-
-The included weights already work universally for any image.
-If you want to re-derive them from scratch:
-
-```bash
-python fit_weights.py --images /path/to/some/images/
-```
-
-## Fully-geometric DAV2 (new)
-
-`phi_depth.py` above keeps the HF backbone/neck and only swaps the last
-`32->1` layer. The `geo_*` modules go all the way: **backbone + neck +
-head**, every weight phi-encoded (`sign × φ^((exp−32768)/512)`, K=512)
-with a shared LUT. Inference imports only torch+numpy — no
-`transformers`, no HuggingFace download.
+It started with a 125-byte decoder head. It ended with the whole model.
 
 ![HF vs geometric parity — input | HF depth | geometric depth | |error|, corr=0.9999](docs/geometric_parity.png)
 
 *Same input through HF `Depth-Anything-V2-Small-hf` and our geometric
-pipeline. Correlation 0.9999; geometric runs the full model, not just the head.*
+pipeline. Correlation 0.9999 — and the geometric side runs the full
+model, not just the head.*
 
-### Backbone — DINOv2 ViT-S, geometric (`geo_backbone.py`)
+## What is this?
 
-HF spec: 12 layers, hidden 384, 6 heads, patch 14, out stages 3/6/9/12
-(22M params). Forward order (pre-norm → QKV → 6-head softmax → proj →
-layer-scale residual → MLP/GELU → layer-scale residual, final layernorm)
-is ported from `geometric_colorizer_v15_attention.py`
-(`GeometricAttentionLayer`/`GeometricDINOv2`: *"Attention IS geometric —
-just matrix ops"*). Patch embed, QKV, proj, MLP, norms, layer-scales,
-CLS token and position embeddings are all baked as phi
-(sign, exponent) pairs and LUT-decoded once at load — the same
-`PhiEncoder` scheme as `phi_geometric/core/encoder.py`. Bicubic
-position-embedding interpolation handles non-518 inputs.
+Depth Anything V2 is a monocular depth model: a DINOv2 ViT backbone
+(22M params) feeds a DPT neck (2.7M, multiscale reassemble + fusion)
+which feeds a small convolutional head (27K) that outputs depth. We
+rebuilt all three stages geometrically:
 
-### Neck — DPT reassemble + fusion, geometric (`geo_neck.py`)
+1. **Phi-encoded replica** (`geo_*`) — every weight baked from the HF
+   model into golden-ratio-lattice form. Multiplication becomes exponent
+   addition; a shared LUT decodes. Bit-near-exact vs HF, no
+   `transformers`, no download at inference.
+2. **Integer datapath** (`geo_int.py`, `geo_jit.py`) — the same math with
+   zero floating point at runtime: integer LUT-adds, fixed-point MACs,
+   LUT softmax/GELU. Proven stage by stage against HF activations.
+3. **Embedded artifact** (`c_port/`) — the integer core as portable C99
+   with offline-generated tables and bit-exact host tests.
 
-HF spec (`DepthAnythingNeck`, 2.7M params): 4× reassemble (1×1 proj
-384→48/96/192/384, then ×4 deconv / ×2 deconv / identity / stride-2
-conv), 4× 3×3 convs to 64ch, then 4 fusion stages in reverse order
-(small→large) each with 1×1 proj + 2× pre-act residual blocks and
-bilinear ×2 upsample. All conv weights are phi-baked; interpolation
-stays analytic (no weights to encode). Fusion also accepts
-`fusion_exponents` for φ-weighted multiscale fusion
-(`φ^e_i / Σφ^e_j`, from `da2_multiscale_phi.py`); default is uniform,
-i.e. exact replication.
+The original 125-byte head demo (`phi_depth.py`) is preserved below as
+the lightweight path: stock HF backbone/neck with only the final `32→1`
+layer replaced by 125 bytes of φ-weights.
 
-### Head — depth decoder, geometric (`geo_head.py`)
+## Results
 
-HF spec (`DepthAnythingDepthEstimationHead`, 27K params): conv 64→32
-3×3, bilinear upsample to full res, conv 32→32 3×3, ReLU (this is the
-old `head.activation1` tap the 125-byte fast path hooks), conv 32→1
-1×1, ReLU×max_depth. All three convs are phi-baked. Two extra modes:
-`fast_predict_125b()` reuses `weights/phi_weights_compact.bin` for
-webcam speed, and `AnalyticHead` (ported from
-`experimental_decoder.py`: edge/texture/color/perspective cues with
-`φ^0,−1,−2,−3` weights) shows the zero-learned-weight limit.
+Measured 2026-09-21 (CUDA fp32 unless noted). Correlation vs HF unless noted.
 
-### Install — build weights from HF, don't ship them
-
-The baked weights (`weights/geometric_*.npz`, ~47MB) are **not** in git
-(gitignored, like `captures/`). Each user builds them once from the
-original HF model:
-
-```bash
-git clone <this-repo> && cd dav2_reverse
-python3 -m venv venv && source venv/bin/activate   # recommended (PEP 668 systems require it)
-pip install -r requirements.txt
-python export_geometric_weights.py   # HF download ~94MB, bakes phi npz locally
-python demo_geometric.py             # HF -> geometric figure, expect corr > 0.999
-python test_geometric_parity.py      # gradient+checker parity suite
-python geo_webcam.py                 # live fully-geometric webcam (M/S/X)
-```
-
-Measured 2026-09-21 (CUDA, fp32 unless noted):
 | Check | Result |
 |-------|--------|
-| synthetic gradient vs HF | corr=0.999995 |
-| synthetic checker vs HF | corr=0.999998 |
-| demo scene vs HF | corr=0.999914 |
-| real webcam frame, shared input, fp32 | corr=0.999990 |
-| live webcam fp16 | ~95–100 FPS after warmup, corr≈0.986–0.998 (fp16+resize diff) |
-| live webcam CPU-only (`--cpu`, 364px) | ~15 FPS, no GPU needed |
+| Full pipeline, synthetic gradient | 0.999995 |
+| Full pipeline, synthetic checker | 0.999998 |
+| Full pipeline, demo scene | 0.999914 |
+| Full pipeline, real webcam frame (shared input) | 0.999990 |
+| Live webcam, fp16 GPU | ~95–100 FPS, ≈0.986–0.999 |
+| Live webcam, CPU-only (`--cpu`, 364px) | ~15 FPS, no GPU |
+| Integer transformer layer0 vs HF (1370 tokens) | 0.999996 (attn 0.999999, MLP 0.999999) |
+| Integer neck convs, chained (1×1 → 3×3 → 3×3+ReLU) | 0.999920 / 0.999877 / 0.999663 |
+| Integer deconv / softmax / bridge roundtrip | 0.999970 / 1.000000 / 1.000000 |
+| Numba hot loops (bit-exact) | head 368×, re-encode 130×, interp up to 120× |
+| C99 core host test | bit-exact 0/64, ALL PASS |
 
-## CPU-only
-
-No GPU required. The pipeline falls back to CPU automatically; `--cpu`
-forces it (with a smaller 364px default input for speed):
+## Quick start
 
 ```bash
-python geo_webcam.py --cpu              # ~15 FPS on desktop CPU
-python geo_webcam.py --cpu --size 518   # full res, slower (~7 FPS first frame)
+git clone git@github.com:lostdemeter/dav2_reverse.git && cd dav2_reverse
+python3 -m venv venv && source venv/bin/activate   # recommended (PEP 668 systems require it)
+pip install -r requirements.txt
+python export_geometric_weights.py   # one-time: HF download ~94MB, bakes phi weights locally
+python demo_geometric.py             # HF -> geometric figure, expect corr > 0.999 (no webcam needed)
+python test_geometric_parity.py      # gradient + checker parity suite
+python geo_webcam.py                 # live fully-geometric webcam (below)
+python geo_int.py                    # integer-datapath parity suite (takes a few minutes, CPU)
+cd c_port && make test               # C core host test
 ```
 
-## No-FPU prototype (`geo_int.py`)
+The baked weights (`weights/geometric_*.npz`, ~47MB) are **not** in git —
+each user builds them with the export script. Nothing large is ever pushed.
 
-Yes — the phi math genuinely doesn't need an FPU at runtime. A value is
-`sign × φ^(exp/512)`, so multiply is integer exponent addition (+ sign
-XOR) and add/sub is an integer LUT over the exponent difference
-(`φ^a+φ^b = φ^(max+LUT[max−min])`). LUTs are baked offline; the runtime
-path is add/sub/compare/XOR + LUT gather only. This matches the earlier
-`integer_phi_engine.py` / `phi_avx512.c` work (integer XOR+ADD engine,
-LUT-only decode).
+Webcam controls (`phi_depth.py` and `geo_webcam.py`):
 
-`geo_int.IntegerPhiHead` proves the accumulation core on the 32-wide
-depth head: integer-head vs float-head corr=0.999751, ~29 µs/px in a
-pure-Python int loop (~8 s/frame at 518² — a Numba/C port per the
-`jit_phi_matmul.py` precedent would bring 100–1000×). `int_conv2d`
-extends this to neck convolutions (1×1, 3×3, bias, ReLU, all
-integer-chained with tree reduction to bound LUT-rounding error):
-reassemble-proj corr=0.999920, chained 3×3 corr=0.999877, chained
-fusion-conv+ReLU corr=0.999663 (`python geo_int.py`). The fixed-point
-bridge (`to_fixed`/`from_fixed`, 15-bit mantissa, offline FRAC/COARSE/
-FINE LUTs) adds the resampling + attention core with zero FPU at
-runtime: bridge roundtrip 1.000000, bilinear ×2 interp 0.999704,
-non-overlapping deconv (re1 k2/s2, real weights) 0.999970, 290-way
-stable softmax 1.000000. The summit — a **full integer transformer
-layer** (LayerNorm via int mean/var/`isqrt`/division, QKV/out-proj/MLP
-as int64 MACs, attention softmax staying fixed-point through attn@V,
-GELU via bounded LUT, layer-scales, residuals; baked phi weights →
-absolute fixed-point once, offline) — matches HF DINOv2 layer0 at full
-1370-token resolution: attn block 0.999999, MLP block 0.999999, full
-layer 0.999996. `geo_jit.py` ports the hot loops to Numba (same integer
-ops, bit-exact): head 27µs/px → 0.1µs/px (~368× with `prange`),
-`from_fixed` 1.5µs/el → 0.011µs/el (~130×), bilinear interp 12ms →
-0.1ms (~62–120×, bit-exact both align-corner modes). `c_port/` is the
-embedded artifact: portable C99 core (`phi_int.c`, zero floats —
-verified by grep) with offline-generated LUTs, host test bit-exact
-0/64 vs Python with `C PORT: ALL PASS`, plus a trimming guide to fit
-tens of KB of flash. Remaining integer gaps: overlapping
-deconv/stride-conv on the fixed canvas (same machinery applies).
-Honest boundaries:
-feature *encoding* (float→int) and final decode-for-display still use
-floats — on FPU-free hardware the sensor front-end would emit
-fixed-point ints with an integer encode LUT (future work), as would the
-remaining ViT nonlinearities (softmax/norm/GELU each become bounded
-integer LUTs, standard quantized-inference practice).
+| Key | Action |
+|-----|--------|
+| M | Cycle colormap (magma → viridis → plasma → inferno → turbo) |
+| S | Save frame to `./captures/` (gitignored, never uploaded) |
+| X | Quit |
 
-## Repository Structure
+```bash
+python geo_webcam.py --cpu              # CPU-only, ~15 FPS
+python geo_webcam.py --cpu --size 518   # full res, slower
+python geo_webcam.py --frames 5 --compare-hf   # headless check + HF parity
+```
+
+## How it works
+
+A φ-value is `sign × φ^(exponent / 512)` with φ = (1+√5)/2. On this
+lattice, **multiplication is integer exponent addition** and addition is
+an integer LUT over the exponent difference
+(`φ^a + φ^b = φ^(max + LUT[max−min])`). Weights cluster tightly on the
+lattice (peak near `φ^−9`), so the encoding is near-lossless and the
+runtime needs no FPU — only add/sub/compare/shift/XOR plus table
+gathers, with all tables baked offline.
+
+### Backbone — DINOv2 ViT-S (`geo_backbone.py`)
+
+12 layers, hidden 384, 6 heads, patch 14, out stages 3/6/9/12 (22M
+params). Pre-norm → QKV → 6-head softmax → proj → layer-scale residual
+→ MLP/GELU → layer-scale residual, final layernorm. Patch embed, QKV,
+proj, MLP, norms, layer-scales, CLS token and position embeddings are
+all baked as phi (sign, exponent) pairs and LUT-decoded once at load.
+Bicubic position-embedding interpolation handles non-518 inputs.
+
+### Neck — DPT reassemble + fusion (`geo_neck.py`)
+
+4× reassemble (1×1 proj 384→48/96/192/384, then ×4 deconv / ×2 deconv /
+identity / stride-2 conv), 4× 3×3 convs to 64ch, then 4 fusion stages in
+reverse order (small→large), each a 1×1 proj plus 2× pre-act residual
+blocks with bilinear ×2 upsample (2.7M params). All conv weights are
+phi-baked; interpolation stays analytic. An optional `fusion_exponents`
+argument does φ-weighted multiscale fusion (`φ^e_i / Σφ^e_j`); default
+is uniform, i.e. exact replication.
+
+### Head — depth decoder (`geo_head.py`)
+
+Conv 64→32 3×3, bilinear upsample to full res, conv 32→32 3×3, ReLU,
+conv 32→1 1×1, ReLU×max_depth (27K params, all phi-baked). Two extra
+modes: `fast_predict_125b()` reuses the 125-byte compact weights for
+webcam speed, and `AnalyticHead` (edge/texture/color/perspective cues
+with `φ^0,−1,−2,−3` weights, zero learned parameters) shows the
+no-learning limit.
+
+### Integer datapath (`geo_int.py`, `geo_jit.py`, `c_port/`)
+
+Two runtimes, same math. The **log-domain** path accumulates with
+integer LUT-adds and tree reduction (log₂(T) rounding levels instead of
+T). The **fixed-point bridge** converts groups to int64 once
+(`to_fixed`), accumulates exactly, and re-encodes once (`from_fixed`,
+15-bit mantissa, offline FRAC/COARSE/FINE LUTs) — this carries
+resampling, deconvs, softmax (which stays fixed-point through attn@V),
+LayerNorm (int mean/var/`isqrt`/division) and GELU (bounded LUT). The
+full integer transformer layer matches HF layer0 at 0.999996.
+`geo_jit.py` compiles the hot loops with Numba (bit-exact, 100×+).
+`c_port/` is the firmware-shaped artifact: portable C99, zero floats in
+the core (verified by grep), offline LUT/vector generators, `make test`
+with bit-exact host checks, and an MCU trimming guide.
+
+Honest boundaries: float→int encoding at the sensor/embeddings input
+and final decode-for-display still use floats — on FPU-free hardware the
+front end emits fixed-point ints with an integer encode LUT. Overlapping
+deconv/stride-conv on the fixed canvas reuses the same machinery and is
+not yet wired. Thresholds in the test suites are set where each path's
+quantization floor actually is (documented inline), all far above
+typical int8 practice (~0.99).
+
+### The 125-byte head (`phi_decoder.py`, `phi_compact.py`)
+
+The project origin: DA2's final layer is a linear `32→1` projection, and
+the whole projection fits in 125 bytes of φ-quantized weights
+(`PHI2` format: relative exponents, packed signs) at 99.99% correlation.
+`phi_depth.py` runs this against the stock HF backbone at 33+ FPS;
+`fit_weights.py` re-derives the weights from any image folder (optional
+— pre-fitted weights are committed).
+
+## Repository structure
 
 ```
-phi-depth/
+dav2_reverse/
 ├── README.md              # This file
 ├── LICENSE                # GPLv3
-├── requirements.txt       # Minimal deps
-├── phi_depth.py           # Head-only demo (HF backbone/neck + 125-byte head)
-├── phi_decoder.py         # φ-arithmetic decoder core
-├── phi_compact.py         # Compact 125-byte storage format
+├── requirements.txt       # numpy, opencv, torch, transformers, Pillow, scipy, numba
 ├── geo_lut.py             # Shared φ-LUT (sign×φ^(exp/K) encode/decode)
 ├── geo_backbone.py        # Geometric DINOv2 ViT-S + export_from_hf()
 ├── geo_neck.py            # Geometric DPT reassemble+fusion + export_from_hf()
 ├── geo_head.py            # Geometric head + AnalyticHead + export_from_hf()
 ├── geo_depth.py           # End-to-end geometric DAV2 (no transformers)
-├── geo_webcam.py          # Live fully-geometric webcam test (--cpu for CPU-only)
-├── geo_int.py             # Integer-only (no-FPU) phi core + head prototype
-├── geo_jit.py             # Numba-JIT integer hot loops (bit-exact, 100x+)
+├── geo_webcam.py          # Live fully-geometric webcam (GPU/CPU/headless)
+├── geo_int.py             # Integer-only datapath + parity suites
+├── geo_jit.py             # Numba-JIT integer hot loops (bit-exact)
 ├── c_port/                # Portable C99 integer core + LUT gens + host test
-│   ├── phi_int.h / phi_int.c   # zero-float core (phi_add, from/to_fixed, head, softmax, gelu)
+│   ├── phi_int.h / phi_int.c   # zero-float core
 │   ├── gen_luts.py / gen_vectors.py  # offline generators (floats stay here)
 │   ├── test_phi_int.c / Makefile     # `make test` → bit-exact 0/64, ALL PASS
-│   └── generated/              # GITIGNORED build outputs (LUTs, vectors)
+│   └── generated/              # GITIGNORED build outputs
 ├── export_geometric_weights.py  # One-time HF->phi bake (builds gitignored npz)
-├── test_geometric_parity.py     # Parity suite (corr > 0.999)
+├── test_geometric_parity.py     # Float pipeline parity (corr > 0.999)
 ├── demo_geometric.py            # HF->geometric demo figure (no webcam)
+├── phi_depth.py           # Head-only realtime demo (HF backbone + 125-byte head)
+├── phi_decoder.py         # φ-arithmetic decoder core
+├── phi_compact.py         # Compact 125-byte storage format
+├── fit_weights.py         # Optional: re-fit 125-byte weights from images
 ├── weights/
-│   ├── phi_weights.bin        # Standard weights (203 bytes, committed)
-│   ├── phi_weights_compact.bin # Compact weights (125 bytes, committed)
-│   └── geometric_*.npz        # Baked phi weights (~47MB, GITIGNORED, build locally)
-├── docs/
-│   ├── demo.png               # Head-only demo screenshot
-│   └── geometric_parity.png   # HF vs geometric parity figure
-└── fit_weights.py         # Optional: re-fit 125-byte weights from DA2
+│   ├── phi_weights.bin / phi_weights_compact.bin  # 203/125 bytes, committed
+│   └── geometric_*.npz    # ~47MB baked phi weights, GITIGNORED, build locally
+└── docs/
+    ├── demo.png               # Head-only demo screenshot
+    └── geometric_parity.png   # HF vs geometric parity figure
 ```
 
-`captures/` (webcam snapshots) is gitignored and never uploaded.
+`captures/` (webcam snapshots), `c_port/generated/`, and
+`weights/geometric_*.npz` are gitignored and never uploaded.
+
+## Requirements
+
+- Python 3.8+, USB webcam for the live demos
+- GPU recommended (`~95–100 FPS` fp16); CPU works (`~15 FPS` at 364px)
+- gcc + standard C library for `c_port` (host test only)
 
 ## License
 
@@ -239,5 +204,5 @@ GPLv3 — see [LICENSE](LICENSE).
 
 ## Credits
 
-- [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2) for the backbone
+- [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2) for the original model
 - Part of the [TruthSpace Geometric LCM](https://github.com/lostdemeter/truthspace-lcm) research project
