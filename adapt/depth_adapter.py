@@ -2,10 +2,13 @@
 
 Implements the vendored ExperimentAdapter protocol over a small JSON DSL:
 
-    {"readout": 3, "res_scales": [0,0,0,0], "head": "geo-conv"}
+    {"readout": 3, "res_scales": [0,0,0,0], "head": "geo-conv",
+     "taps": [3,6,9,12], "tap_gains": [0,0,0,0]}
 
-Torch/geo imports are lazy so DSL/proposal logic stays importable and
-testable without GPU or weights (see test_smoke.py).
+taps/gains reach into the BACKBONE: which ViT layers feed the neck's four
+reassemble stages, and at what phi-power gain (free as an exponent add in
+the integer datapath). Torch/geo imports are lazy so DSL/proposal logic
+stays importable and testable without GPU or weights (see test_smoke.py).
 """
 
 import hashlib
@@ -24,8 +27,13 @@ CORR_PASS = 0.999
 READOUTS = (0, 1, 2, 3)
 SCALE_LO, SCALE_HI = -2, 2
 HEADS = ("geo-conv", "direct", "analytic")
+# 1-indexed backbone layers per neck position; strict increase enforced
+# so pyramid roles (x4up/x2up/identity/x2down) stay sane.
+TAP_BANDS = ((2, 3, 4), (5, 6, 7), (8, 9, 10), (11, 12))
+GAIN_LO, GAIN_HI = -1, 1
 
-SEED_CONFIG = {"readout": 3, "res_scales": [0, 0, 0, 0], "head": "geo-conv"}
+SEED_CONFIG = {"readout": 3, "res_scales": [0, 0, 0, 0], "head": "geo-conv",
+               "taps": [3, 6, 9, 12], "tap_gains": [0, 0, 0, 0]}
 
 
 def validate_config(cfg):
@@ -33,8 +41,9 @@ def validate_config(cfg):
     if not isinstance(cfg, dict):
         raise ValueError("config must be an object")
     keys = set(cfg)
-    if keys != {"readout", "res_scales", "head"}:
-        raise ValueError(f"config keys must be exactly readout/res_scales/head, got {sorted(keys)}")
+    want_keys = {"readout", "res_scales", "head", "taps", "tap_gains"}
+    if keys != want_keys:
+        raise ValueError(f"config keys must be exactly {sorted(want_keys)}, got {sorted(keys)}")
     readout = cfg["readout"]
     if type(readout) is not int or readout not in READOUTS:
         raise ValueError(f"readout must be one of {READOUTS}")
@@ -44,7 +53,21 @@ def validate_config(cfg):
         raise ValueError(f"res_scales must be 4 ints in [{SCALE_LO},{SCALE_HI}]")
     if cfg["head"] not in HEADS:
         raise ValueError(f"head must be one of {HEADS}")
-    return {"readout": readout, "res_scales": list(scales), "head": cfg["head"]}
+    taps = cfg["taps"]
+    if (not isinstance(taps, list) or len(taps) != 4
+            or any(type(v) is not int for v in taps)):
+        raise ValueError("taps must be 4 layer ints")
+    for i, v in enumerate(taps):
+        if v not in TAP_BANDS[i]:
+            raise ValueError(f"taps[{i}]={v} outside band {TAP_BANDS[i]}")
+    if not (taps[0] < taps[1] < taps[2] < taps[3]):
+        raise ValueError(f"taps must strictly increase, got {taps}")
+    gains = cfg["tap_gains"]
+    if (not isinstance(gains, list) or len(gains) != 4
+            or any(type(v) is not int or not GAIN_LO <= v <= GAIN_HI for v in gains)):
+        raise ValueError(f"tap_gains must be 4 ints in [{GAIN_LO},{GAIN_HI}]")
+    return {"readout": readout, "res_scales": list(scales), "head": cfg["head"],
+            "taps": list(taps), "tap_gains": list(gains)}
 
 
 def neighbor_configs(cfg):
@@ -62,6 +85,23 @@ def neighbor_configs(cfg):
         if r != cfg["readout"]:
             c = dict(cfg, readout=r)
             out.append((c, f"readout stage {cfg['readout']}->{r} changes scale emphasis", 20))
+    for i, v in enumerate(cfg["taps"]):
+        for d in (-1, 1):
+            nv = v + d
+            if nv in TAP_BANDS[i]:
+                taps = list(cfg["taps"])
+                taps[i] = nv
+                if taps[0] < taps[1] < taps[2] < taps[3]:
+                    c = dict(cfg, taps=taps)
+                    out.append((c, f"backbone tap {i}: layer {v}->{nv}", 22))
+    for i, v in enumerate(cfg["tap_gains"]):
+        for d in (-1, 1):
+            nv = v + d
+            if GAIN_LO <= nv <= GAIN_HI:
+                gains = list(cfg["tap_gains"])
+                gains[i] = nv
+                c = dict(cfg, tap_gains=gains)
+                out.append((c, f"tap {i} gain xphi^{nv} (free in integer datapath)", 26))
     for i, v in enumerate(cfg["res_scales"]):
         for d in (-1, 1):
             nv = v + d
@@ -98,6 +138,19 @@ class ScaledNeckMixin:
         return hidden
 
 
+def _backbone_tapped(backbone, preprocess, device, rgb, taps, gains):
+    """Backbone stages at tap layers with phi-power gains. Returns fmaps, ph, pw."""
+    import torch
+    from geo_lut import PHI
+    pv = preprocess(rgb).to(device)
+    with torch.no_grad():
+        fmaps, ph, pw = backbone.forward_stages(pv, taps=taps)
+    out = []
+    for fm, g in zip(fmaps, gains):
+        out.append(fm * float(PHI ** g) if g else fm)
+    return out, ph, pw
+
+
 def run_pipeline(shared, config, rgb_list, fit_explore=None):
     """Run built pipeline on RGB scenes. Returns list of depth arrays.
 
@@ -125,9 +178,10 @@ def run_pipeline(shared, config, rgb_list, fit_explore=None):
         if config['head'] == 'analytic':
             depths.append(_analytic_predict(rgb))
             continue
-        pv = preprocess(rgb).to(device)
+        fmaps, ph, pw = _backbone_tapped(
+            backbone, preprocess, device, rgb,
+            config['taps'], config['tap_gains'])
         with torch.no_grad():
-            fmaps, ph, pw = backbone.forward_stages(pv)
             fused = neck(fmaps)
             h = fused[config['readout']]
             if config['head'] == 'geo-conv':
@@ -186,9 +240,10 @@ def fit_direct_head(shared, config, explore):
 
     feats, tgts = [], []
     for rgb, ref, _cid in explore:
-        pv = preprocess(rgb).to(device)
+        fmaps, ph, pw = _backbone_tapped(
+            backbone, preprocess, device, rgb,
+            config['taps'], config['tap_gains'])
         with torch.no_grad():
-            fmaps, ph, pw = backbone.forward_stages(pv)
             fused = neck(fmaps)
             h = fused[config['readout']]
         Ht, Wt = h.shape[2], h.shape[3]
@@ -243,8 +298,10 @@ class DepthAdapter:
         base = validate_config(incumbent.config)
         tried = set(tried)
         for cfg, rationale, _prio in neighbor_configs(base):
-            spec = TrialSpec(f"r{cfg['readout']}-s{''.join(map(str, cfg['res_scales']))}-{cfg['head']}",
-                             cfg, rationale)
+            name = (f"r{cfg['readout']}-t{''.join(map(str, cfg['taps']))}"
+                    f"-g{''.join(map(str, cfg['tap_gains']))}"
+                    f"-s{''.join(map(str, cfg['res_scales']))}-{cfg['head']}")
+            spec = TrialSpec(name, cfg, rationale)
             if spec.identifier not in tried:
                 return spec
         return None

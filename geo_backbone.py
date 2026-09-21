@@ -74,13 +74,16 @@ class GeometricDinov2Backbone(torch.nn.Module):
     def _g(self, name: str) -> torch.Tensor:
         return self._w[name]
 
-    def forward_stages(self, pixel_values: torch.Tensor):
+    def forward_stages(self, pixel_values: torch.Tensor, taps=None):
         """
         Args: pixel_values [B,3,H,W] float32.
-        Returns: list of 4 feature maps [B,384,H/14,W/14] for stages 3/6/9/12,
+              taps: 1-indexed layer numbers to tap (default OUT_STAGES).
+        Returns: list of feature maps [B,384,H/14,W/14] in tap order,
                  plus patch_h, patch_w.
         """
         assert self.buffers_loaded, "call load_geometric() first"
+        want = tuple(taps) if taps is not None else OUT_STAGES
+        assert all(1 <= t <= LAYERS for t in want), f"taps out of range: {want}"
         B, _, H, W = pixel_values.shape
         x = pixel_values.to(self.device)
         ph, pw = H // PATCH, W // PATCH
@@ -137,14 +140,14 @@ class GeometricDinov2Backbone(torch.nn.Module):
             h2 = F.linear(h2, self._g(p + 'mlp2.weight'), self._g(p + 'mlp2.bias'))
             ls2 = self._g(p + 'ls2')
             x = x + h2 * ls2
-            if (li + 1) in OUT_STAGES:
+            if (li + 1) in want:
                 stages[li + 1] = x
 
         # final layernorm (HF apply_layernorm=True)
         norm_w = self._w.get('final_norm.weight')
         norm_b = self._w.get('final_norm.bias')
         fmaps = []
-        for s in OUT_STAGES:
+        for s in want:
             h = stages[s]
             if norm_w is not None:
                 h = F.layer_norm(h, (HIDDEN,), norm_w, norm_b)

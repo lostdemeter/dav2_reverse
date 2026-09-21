@@ -184,3 +184,26 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   (a learned backbone still executes through linear/norm/gelu). Next
   learning step proposed: backbone stage/scale search in the DSL —
   not started; saying so plainly rather than implying it.
+
+## 2026-09-21 — backbone stage/scale search lands (taps + tap_gains)
+
+- DSL v2 adds `taps` (which ViT layers feed the neck, bands per
+  position + strict increase so pyramid roles stay sane) and
+  `tap_gains` (per-stage `×φ^e`, free as an exponent add in
+  integer-land). `forward_stages` takes optional taps; default path
+  verified bit-identical. Seed space grows 13 → 28 neighbors.
+- 29-trial run to `proposal_space_exhausted`, incumbent retained
+  (exact replication including taps 3/6/9/12). The backbone interface
+  is genuinely sensitive: tap 12→11 collapses everything (retention
+  lost), 9→8 regresses the gate, 3→4 loses exploration — but tap
+  3→2 TIES everywhere (no gate/retention damage). A real lead for
+  follow-up: is layer 2 as good as 3 across harder scenes, or a
+  fixture-resolution artifact? Not claimed either way here.
+- Gains: mostly ties or small losses; stage-3 gain+1 regresses the
+  gate. Zero promotions overall — correct, since ties with unchanged
+  bytes can't promote under the base rule.
+- LIBRARY (measurement hygiene): `model_bytes` deltas of ±3 in this
+  run are pickle-encoding noise from small-int values, not real size
+  changes. Byte deltas near zero should be treated as zero before any
+  efficiency reasoning touches them — a tolerance the EfficiencyRule
+  doesn't have yet. Logged as the next rule refinement.

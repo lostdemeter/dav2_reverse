@@ -21,19 +21,25 @@ def check(cond, msg):
 
 seed = validate_config(dict(SEED_CONFIG))
 check(seed == SEED_CONFIG, "seed validates")
-for bad in ({}, {"readout": 9, "res_scales": [0, 0, 0, 0], "head": "geo-conv"},
-            {"readout": 3, "res_scales": [0, 0, 0], "head": "geo-conv"},
-            {"readout": 3, "res_scales": [0, 0, 0, 9], "head": "geo-conv"},
-            {"readout": 3, "res_scales": [0, 0, 0, 0], "head": "fluid"},
-            {"readout": 3, "res_scales": [0, 0, 0, 0], "head": "geo-conv", "extra": 1}):
+_good = dict(SEED_CONFIG)
+for bad in ({}, dict(_good, readout=9),
+            dict(_good, res_scales=[0, 0, 0]),
+            dict(_good, res_scales=[0, 0, 0, 9]),
+            dict(_good, head="fluid"),
+            dict(_good, taps=[3, 6, 9]),
+            dict(_good, taps=[3, 6, 9, 13]),
+            dict(_good, taps=[3, 6, 6, 12]),
+            dict(_good, taps=[4, 3, 9, 12]),
+            dict(_good, tap_gains=[0, 0, 0, 2]),
+            dict(_good, extra=1)):
     try:
-        validate_config(bad)
+        validate_config(dict(bad))
         check(False, f"rejects {bad}")
     except ValueError:
-        check(True, f"rejects {bad}")
+        check(True, f"rejects {list(bad)[-1] if bad else '{}'}")
 
 moves = neighbor_configs(seed)
-check(len(moves) == 2 + 3 + 8, f"seed has 13 neighbors (got {len(moves)})")
+check(len(moves) == 2 + 3 + 8 + 7 + 8, f"seed has 28 neighbors (got {len(moves)})")
 specs = [TrialSpec(f"m{i}", dict(c), r) for i, (c, r, _p) in enumerate(moves)]
 check(len({s.identifier for s in specs}) == len(specs), "neighbor identifiers unique")
 check(all(validate_config(dict(s.config)) == dict(s.config) for s in specs),

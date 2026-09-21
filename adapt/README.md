@@ -16,7 +16,8 @@ branch and does not touch `main` or the upstream foundry repo.
 ## The search space (TrialSpec DSL)
 
 ```json
-{"readout": 3, "res_scales": [0, 0, 0, 0], "head": "geo-conv"}
+{"readout": 3, "res_scales": [0, 0, 0, 0], "head": "geo-conv",
+ "taps": [3, 6, 9, 12], "tap_gains": [0, 0, 0, 0]}
 ```
 
 - `readout` 0..3 — which fused neck stage feeds the head (3 = exact replication).
@@ -26,6 +27,10 @@ branch and does not touch `main` or the upstream foundry repo.
   by least squares on exploration data, the `fit_weights.py` idea at 64ch),
   or `analytic` (zero-weight edge/texture/perspective head — the
   no-learning limit probe; correctly rejected on all gates).
+- `taps` — which backbone ViT layers feed the neck's four reassemble
+  stages (bands per position, strictly increasing; seed is HF's 3/6/9/12).
+- `tap_gains` — four ints in [-1, 1]: `×φ^e` gain per tapped stage
+  (free as an exponent add in the integer datapath).
 
 Seed = exact replication. `propose()` enumerates single moves
 (readout±1, one scale ±1, head flip) with rationale; the core's
