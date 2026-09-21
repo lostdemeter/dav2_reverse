@@ -92,6 +92,37 @@ def _decode_exp(e: int, zero_exp: int = 0) -> float:
     return float(np.float32(PHI) ** ((np.float32(e) - BIAS) / K))
 
 
+_JIT = None  # lazy (fn_from_fixed, coarse, coff, fine) or False
+
+
+def _jit_kernels():
+    """Lazy Numba kernels (geo_jit). Returns dict or None (python fallback)."""
+    global _JIT
+    if _JIT is None:
+        try:
+            from geo_jit import from_fixed_njit, int_head_njit
+            coarse, fine = _get_coarse_fine()
+            _JIT = {'from_fixed': from_fixed_njit,
+                    'head': int_head_njit,
+                    'coarse': coarse.astype(np.int32),
+                    'coff': _COARSE_OFF,
+                    'fine': fine.astype(np.int32)}
+        except Exception:
+            _JIT = False
+    return _JIT if _JIT is not False else None
+
+
+def _reencode(q, m):
+    """from_fixed dispatch: Numba kernel when available (bit-exact), else python."""
+    j = _jit_kernels()
+    q = np.asanyarray(q, dtype=np.int64)
+    if j is not None:
+        s, e, z = j['from_fixed'](q.reshape(-1), int(m), FIXED_F,
+                                  j['coarse'], j['coff'], j['fine'])
+        return s.reshape(q.shape), e.reshape(q.shape), z.reshape(q.shape)
+    return from_fixed_vec(q, m)
+
+
 class IntegerPhiHead:
     """Depth head with integer-only runtime (32 MACs/pixel via LUT-adds)."""
 
@@ -155,7 +186,20 @@ class IntegerPhiHead:
         return phi_add(acc_s, acc_e, self.tm_s, self.tm_e, add_lut, sub_lut)
 
     def int_predict(self, fs: np.ndarray, fe: np.ndarray) -> np.ndarray:
-        """Integer-only over N pixels. fs/fe: [N,32] int. Returns float (decode for display)."""
+        """Integer-only over N pixels. fs/fe: [N,32] int. Returns float (decode for display).
+
+        Uses the Numba kernel when available (bit-exact vs the python loop).
+        """
+        j = _jit_kernels()
+        if j is not None:
+            s, e = j['head'](np.asanyarray(fs, dtype=np.int8),
+                             np.asanyarray(fe, dtype=np.int32),
+                             self.w_s, self.w_e, self.m_s, self.m_e,
+                             np.int8(self.tm_s), np.int32(self.tm_e),
+                             self.add_lut.astype(np.int32),
+                             self.sub_lut.astype(np.int32))
+            return np.array([_decode_exp(int(ee), 0) * int(ss) if int(ee) != 0 else 0.0
+                             for ss, ee in zip(s, e)])
         n = fs.shape[0]
         out = np.empty(n, dtype=np.float64)
         for i in range(n):
@@ -472,7 +516,7 @@ def fixed_dot_terms(s_terms, e_terms):
     """
     q, m = to_fixed_group(s_terms, e_terms)
     total = q.sum(axis=0, dtype=np.int64)
-    return from_fixed_vec(total, m)
+    return _reencode(total, m)
 
 
 def int_conv2d_fixed(f_s, f_e, f_z, w_s, w_e, b_s=None, b_e=None, b_z=None,
@@ -522,7 +566,7 @@ def int_conv2d_fixed(f_s, f_e, f_z, w_s, w_e, b_s=None, b_e=None, b_z=None,
         if np.all(q == 0):
             out_s[co], out_e[co], out_z[co] = 1, 0, True
             continue
-        s, e, z = from_fixed_vec(q, m)
+        s, e, z = _reencode(q, m)
         out_s[co], out_e[co], out_z[co] = s, e, z
     if b_s is not None:
         add_lut, sub_lut = build_add_lut(), build_sub_lut()

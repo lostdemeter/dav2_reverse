@@ -181,10 +181,14 @@ absolute fixed-point once, offline) — matches HF DINOv2 layer0 at full
 1370-token resolution: attn block 0.999999, MLP block 0.999999, full
 layer 0.999996. `geo_jit.py` ports the hot loops to Numba (same integer
 ops, bit-exact): head 27µs/px → 0.1µs/px (~368× with `prange`),
-`from_fixed` 1.5µs/el → 0.011µs/el (~130×); the gcc C port
-(`phi_avx512.c` precedent) stays future work for real embedded targets.
-Remaining integer gaps: overlapping deconv/stride-conv on the fixed
-canvas (same machinery applies). Honest boundaries:
+`from_fixed` 1.5µs/el → 0.011µs/el (~130×), bilinear interp 12ms →
+0.1ms (~62–120×, bit-exact both align-corner modes). `c_port/` is the
+embedded artifact: portable C99 core (`phi_int.c`, zero floats —
+verified by grep) with offline-generated LUTs, host test bit-exact
+0/64 vs Python with `C PORT: ALL PASS`, plus a trimming guide to fit
+tens of KB of flash. Remaining integer gaps: overlapping
+deconv/stride-conv on the fixed canvas (same machinery applies).
+Honest boundaries:
 feature *encoding* (float→int) and final decode-for-display still use
 floats — on FPU-free hardware the sensor front-end would emit
 fixed-point ints with an integer encode LUT (future work), as would the
@@ -209,6 +213,11 @@ phi-depth/
 ├── geo_webcam.py          # Live fully-geometric webcam test (--cpu for CPU-only)
 ├── geo_int.py             # Integer-only (no-FPU) phi core + head prototype
 ├── geo_jit.py             # Numba-JIT integer hot loops (bit-exact, 100x+)
+├── c_port/                # Portable C99 integer core + LUT gens + host test
+│   ├── phi_int.h / phi_int.c   # zero-float core (phi_add, from/to_fixed, head, softmax, gelu)
+│   ├── gen_luts.py / gen_vectors.py  # offline generators (floats stay here)
+│   ├── test_phi_int.c / Makefile     # `make test` → bit-exact 0/64, ALL PASS
+│   └── generated/              # GITIGNORED build outputs (LUTs, vectors)
 ├── export_geometric_weights.py  # One-time HF->phi bake (builds gitignored npz)
 ├── test_geometric_parity.py     # Parity suite (corr > 0.999)
 ├── demo_geometric.py            # HF->geometric demo figure (no webcam)

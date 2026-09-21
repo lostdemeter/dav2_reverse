@@ -21,6 +21,8 @@ K_JIT = 512
 BIAS_JIT = 32768
 MAX_EXP_JIT = 65535
 DMAX_JIT = 4096
+FRAC_CAP_JIT = 13312
+FIXED_F_JIT = 18
 
 
 @njit(cache=True)
@@ -129,6 +131,156 @@ def int_head_njit(fs, fe, w_s, w_e, m_s, m_e, tm_s, tm_e, add_lut, sub_lut):
     return out_s, out_e
 
 
+@njit(cache=True)
+def _from_fixed_one(q, m, f, coarse, coff, fine):
+    """Single re-encode. Returns (s, e, z). Mirrors from_fixed_scalar."""
+    if q == 0:
+        return np.int8(1), np.int32(0), True
+    s = np.int8(1) if q > 0 else np.int8(-1)
+    a = q if q > 0 else -q
+    shift = _bit_length(a) - 15
+    mant = (a >> np.int64(shift)) if shift >= 0 else (a << np.int64(-shift))
+    t = shift + 14 - f
+    ev = np.int64(m) + np.int64(coarse[t + coff]) + np.int64(fine[mant - 16384])
+    if ev < 0:
+        ev = 0
+    if ev > MAX_EXP_JIT:
+        ev = MAX_EXP_JIT
+    return s, np.int32(ev), False
+
+
+@njit(parallel=True, cache=True)
+def interp_bilinear_njit(f_s, f_e, f_z, Ho, Wo, align_corners,
+                         frac_lut, coarse, coff, fine):
+    """Integer bilinear resample. f_*:(C,H,W) -> (s,e,z) (C,Ho,Wo).
+
+    Fixed-point neighbor average + re-encode, all integer. Bit-exact
+    match of int_interpolate_bilinear_fixed (align_corners both modes).
+    """
+    C = f_s.shape[0]
+    H = f_s.shape[1]
+    W = f_s.shape[2]
+    os = np.empty((C, Ho, Wo), dtype=np.int8)
+    oe = np.empty((C, Ho, Wo), dtype=np.int32)
+    oz = np.empty((C, Ho, Wo), dtype=np.bool_)
+    for c in prange(C):
+        m = np.int32(0)
+        for yy in range(H):
+            for xx in range(W):
+                if not f_z[c, yy, xx] and f_e[c, yy, xx] > m:
+                    m = f_e[c, yy, xx]
+        for i in range(Ho):
+            if align_corners:
+                if Ho == 1:
+                    i0 = 0
+                    i1 = 0
+                    wy0 = 1
+                    wy1 = 0
+                    deny = 1
+                else:
+                    num = i * (H - 1)
+                    den = Ho - 1
+                    i0 = num // den
+                    r = num % den
+                    i1 = i0 + 1
+                    if i1 > H - 1:
+                        i1 = H - 1
+                    wy1 = 0 if i1 == i0 else r
+                    wy0 = den - wy1
+                    deny = den
+            else:
+                # numba integer // and % follow Python floor semantics.
+                num = (2 * i + 1) * H - Ho
+                den = 2 * Ho
+                i0 = num // den
+                r = num % den
+                if i0 < 0:
+                    i0 = 0
+                    i1 = 0
+                    wy0 = den
+                    wy1 = 0
+                elif i0 >= H - 1:
+                    i0 = H - 1
+                    i1 = H - 1
+                    wy0 = den
+                    wy1 = 0
+                else:
+                    i1 = i0 + 1
+                    wy1 = r
+                    wy0 = den - r
+                deny = den
+            for j in range(Wo):
+                if align_corners:
+                    if Wo == 1:
+                        j0 = 0
+                        j1 = 0
+                        wx0 = 1
+                        wx1 = 0
+                        denx = 1
+                    else:
+                        numx = j * (W - 1)
+                        denx = Wo - 1
+                        j0 = numx // denx
+                        rx = numx % denx
+                        j1 = j0 + 1
+                        if j1 > W - 1:
+                            j1 = W - 1
+                        wx1 = 0 if j1 == j0 else rx
+                        wx0 = denx - wx1
+                else:
+                    # numba integer // and % follow Python floor semantics.
+                    numx = (2 * j + 1) * W - Wo
+                    denx = 2 * Wo
+                    j0 = numx // denx
+                    rx = numx % denx
+                    if j0 < 0:
+                        j0 = 0
+                        j1 = 0
+                        wx0 = denx
+                        wx1 = 0
+                    elif j0 >= W - 1:
+                        j0 = W - 1
+                        j1 = W - 1
+                        wx0 = denx
+                        wx1 = 0
+                    else:
+                        j1 = j0 + 1
+                        wx1 = rx
+                        wx0 = denx - rx
+                # fixed-point neighbor values at scale m:
+                v00 = _fixed_at(f_s[c, i0, j0], f_e[c, i0, j0], f_z[c, i0, j0],
+                                m, frac_lut)
+                v01 = _fixed_at(f_s[c, i0, j1], f_e[c, i0, j1], f_z[c, i0, j1],
+                                m, frac_lut)
+                v10 = _fixed_at(f_s[c, i1, j0], f_e[c, i1, j0], f_z[c, i1, j0],
+                                m, frac_lut)
+                v11 = _fixed_at(f_s[c, i1, j1], f_e[c, i1, j1], f_z[c, i1, j1],
+                                m, frac_lut)
+                numv = (v00 * wy0 * wx0 + v01 * wy0 * wx1
+                        + v10 * wy1 * wx0 + v11 * wy1 * wx1)
+                denv = deny * deny * denx * denx
+                qv = (numv + denv // 2) // denv if denv else np.int64(0)
+                s, e, z = _from_fixed_one(qv, m, FIXED_F_JIT, coarse, coff, fine)
+                os[c, i, j] = s
+                oe[c, i, j] = e
+                oz[c, i, j] = z
+    return os, oe, oz
+
+
+@njit(cache=True)
+def _fixed_at(s, e, z, m, frac_lut):
+    """Integer: phi triple -> fixed-point int at scale m. Zero -> 0."""
+    if z:
+        return np.int64(0)
+    d = m - e
+    if d < 0:
+        d = 0
+    if d > FRAC_CAP_JIT:
+        return np.int64(0)
+    v = np.int64(s) * np.int64(frac_lut[d])
+    return v
+
+
 def parity_vs_python(n: int = 2000, seed: int = 5):
     """Bit-exactness vs geo_int Python loops + corr vs float head."""
     import time
@@ -193,5 +345,41 @@ def parity_vs_python(n: int = 2000, seed: int = 5):
     return ok
 
 
+def parity_interp(seed: int = 11):
+    """interp_bilinear_njit vs int_interpolate_bilinear_fixed: bit-exact + speed."""
+    import time
+    from geo_int import (int_encode_array, int_interpolate_bilinear_fixed,
+                         _get_frac, _get_coarse_fine, _COARSE_OFF, FIXED_F)
+    rng = np.random.default_rng(seed)
+    fmap = (rng.standard_normal((8, 17, 17)) * 3).astype(np.float64)
+    fs, fe, fz = int_encode_array(fmap)
+    frac = _get_frac()
+    coarse, fine = _get_coarse_fine()
+    kwargs = dict(frac_lut=frac.astype(np.int64),
+                  coarse=coarse.astype(np.int32), coff=_COARSE_OFF,
+                  fine=fine.astype(np.int32))
+    for ac in (False, True):
+        t0 = time.perf_counter()
+        ps, pe, pz = int_interpolate_bilinear_fixed(fs, fe, fz, 34, 34,
+                                                    align_corners=ac)
+        t_py = time.perf_counter() - t0
+        t0 = time.perf_counter()  # warmup compile
+        interp_bilinear_njit(fs, fe, fz, 34, 34, ac, **kwargs)
+        t0 = time.perf_counter()
+        js, je, jz = interp_bilinear_njit(fs, fe, fz, 34, 34, ac, **kwargs)
+        t_jit = time.perf_counter() - t0
+        exact = bool(np.array_equal(ps, js) and np.array_equal(pe, je)
+                     and np.array_equal(pz, jz))
+        print(f"  [interp ac={ac} bit-exact] {exact}  "
+              f"python {t_py*1000:.0f}ms -> jit {t_jit*1000:.1f}ms "
+              f"({t_py/max(t_jit,1e-9):.0f}x)")
+        if not exact:
+            return False
+    print("JIT-INTERP: PASS")
+    return True
+
+
 if __name__ == '__main__':
-    raise SystemExit(0 if parity_vs_python() else 1)
+    ok1 = parity_vs_python()
+    ok2 = parity_interp()
+    raise SystemExit(0 if (ok1 and ok2) else 1)
