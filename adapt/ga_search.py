@@ -53,6 +53,9 @@ def main():
     ap.add_argument('--pop', type=int, default=6)
     ap.add_argument('--gens', type=int, default=8)
     ap.add_argument('--seed', type=int, default=7)
+    ap.add_argument('--mode', choices=("flat", "style"), default="flat",
+                    help="flat: uniform per-key crossover; style: group-level "
+                         "crossover (co-adapted pairs travel together)")
     args = ap.parse_args()
 
     import torch
@@ -88,6 +91,8 @@ def main():
         return score[1]
 
     t0 = time.perf_counter()
+    first_hit = None  # (gen, unique_evals) when the bar is first met
+    prev_front_hash = None
     for gen in range(args.gens):
         results = [evaluate(cfg) for cfg in pop]
         scores = [r[1] for r in results]
@@ -98,8 +103,18 @@ def main():
             for j in range(i + 1, len(sigs)):
                 zds.append(S.zeta_distance(sigs[i], sigs[j]))
         zmean = sum(zds) / len(zds) if zds else 0.0
+        # Level-2: fingerprint OF the front (patterns of patterns).
+        fsha, _ = S.front_fingerprint(
+            [(pop[i], scores[i][0], scores[i][1]) for i in front], seed_bytes)
+        stable = "STABLE" if fsha == prev_front_hash else "moving"
+        prev_front_hash = fsha
         best = min(range(len(pop)), key=lambda i: (-scores[i][0], scores[i][1]))
+        hit = any(scores[i][0] == total_cases and pop[i]["exp_span"] == 8
+                  and scores[i][1] < seed_bytes for i in range(len(pop)))
+        if hit and first_hit is None:
+            first_hit = (gen, len(cache))
         print(f"gen {gen}: evals={len(cache)} front={len(front)} "
+              f"fronthash={fsha[:8]}:{stable} "
               f"mean_zeta_dist={zmean:.0f} "
               f"best=correct {scores[best][0]}/{total_cases} "
               f"bytes={scores[best][1]} cfg={pop[best]}", flush=True)
@@ -118,7 +133,10 @@ def main():
             c, d = rng.sample(range(len(pop)), 2)
             wc = order.index(c) <= order.index(d)
             pc = pop[c] if wc else pop[d]
-            child = S.crossover(rng, pa, pc)
+            if args.mode == "style":
+                child = S.style_crossover(rng, pa, pc)
+            else:
+                child = S.crossover(rng, pa, pc)
             child = S.mutate(rng, child)  # always mutate: 48-config space
             children.append(child)        # needs churn, not convergence
         pop = elites + children
@@ -134,6 +152,11 @@ def main():
           f"(exp8 + fewer bytes than seed {seed_bytes}) in {dt:.0f}s")
     ok = bool(winners)
     print("CALIBRATION:", "PASS" if ok else "FAIL")
+    if first_hit is not None:
+        print(f"first bar-hit: gen {first_hit[0]}, "
+              f"{first_hit[1]} unique evals (mode={args.mode})")
+    else:
+        print(f"bar never hit (mode={args.mode}, {len(cache)} unique evals)")
     best = min(holders or range(len(pop)),
                key=lambda i: (scores[i][1], -scores[i][0]))
 

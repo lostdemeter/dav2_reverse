@@ -36,6 +36,25 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   never collapsed to 0) — the fingerprint instrumentation earned its
   keep as an observer even before niching uses it.
 
+## 2026-09-21 — level-2: front fingerprints + style crossover (measured non-result)
+
+- Built: `front_record`/`front_fingerprint` (member hashes + hypervolume,
+  measurement-grounded only), `style_crossover` (G1={frac,dmax} /
+  G2={exp,accum} move as units), `--mode flat|style` in ga_search with
+  first-hit tracking (gen + unique evals) and per-gen front hashes.
+- 5 seeds × both modes, identical starts: EVERY run hits at gen 0-1
+  (7-13 evals), flat and style indistinguishable. The 48-config width
+  space saturates under random sampling — no mode can demonstrate an
+  advantage where luck already wins.
+- Verdict, stated exactly: the sublinear-sampling claim is UNTESTED,
+  not refuted. The machinery works (front hashes track, diversity
+  observed 300-900, both modes pass honestly), but the arena is too
+  small to discriminate. The required next arena is the JOINT
+  architecture+width co-search (1000s of configs, cross-DSL style
+  groups) — which is now motivated by measurement rather than assumed.
+  Neighbor search walks single moves; style crossover should win exactly
+   there, or the thesis takes the hit it deserves.
+
 ## 2026-09-21 — fixing the failure mode itself (3 layers)
 
 - Trial lines now print ABSOLUTES (`cand[e6/7 g4/4 r3/3] inc[e7/7...]`)

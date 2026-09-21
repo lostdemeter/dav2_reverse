@@ -55,8 +55,17 @@ python adapt/test_smoke.py       # fast: DSL + neighbor enumeration, no torch
 python adapt/run_search.py       # architecture search (GPU recommended)
 python adapt/drop_search.py      # block-drop search under EfficiencyRule (leaner-model attempts)
 python adapt/graduate.py         # LUT-width search under EfficiencyRule
+python adapt/ga_search.py        # GA over widths: --mode flat|style (level-2 front fingerprints)
 python adapt/emit_c.py           # emit C model from sealed incumbent (bit-exact test)
 ```
+
+Level-2 (styles of styles): `adapt/styles.py` holds genotype ops,
+sha/zeta fingerprints, and front fingerprints (member hashes +
+hypervolume, measurement-grounded only). `--mode style` swaps uniform
+per-key crossover for group crossover (G1={frac,dmax} /
+G2={exp,accum} travel as units). Measured verdict on the 48-config
+width space: no mode beats luck (all hits gen 0-1) — the discriminating
+arena is the joint architecture+width co-search. See NOTES.
 
 Fixtures (`adapt/fixtures/`, gitignored): 6 exploration + 4 gate scenes,
 3 retention anchors (gradient/checker/disc), 4 sealed audit scenes, all

@@ -105,3 +105,64 @@ def pareto_front(scores):
         if not any(dominates(q, p) for j, q in enumerate(scores) if j != i):
             front.append(i)
     return front
+
+
+# Level-2: fingerprints OF fronts (patterns of patterns). A front record
+# bottoms out in measurements only: member config hashes + their measured
+# (correct, bytes) + hypervolume. No vibes cross this line.
+STYLE_GROUPS = (("frac_cap", "dmax"), ("exp_span", "accum"))
+
+
+def hypervolume_2d(points, ref_correct=0, ref_bytes=None):
+    """Hypervolume of (correct, bytes) points vs reference. Higher = better.
+
+    Sort by correct desc; accumulate (c_i - c_next) * (ref_bytes - b_i)
+    over points with bytes < ref_bytes. Deterministic integer/float mix
+    rounded for record stability."""
+    if ref_bytes is None:
+        return 0.0
+    pts = sorted(((c, b) for c, b in points if b < ref_bytes),
+                 key=lambda t: -t[0])
+    hv, prev_c = 0.0, ref_correct
+    for c, b in pts:
+        if c > prev_c:
+            hv += (c - prev_c) * (ref_bytes - b)
+            prev_c = c
+    return hv
+
+
+def front_record(items, ref_bytes):
+    """Canonical record of a Pareto front. items: list[(cfg, correct, bytes)]."""
+    members = sorted((config_fingerprint(cfg), c, b) for cfg, c, b in items)
+    return json.dumps({"members": members,
+                       "hypervolume": round(hypervolume_2d(
+                           [(c, b) for _, c, b in members], ref_bytes=ref_bytes), 3)},
+                      sort_keys=True)
+
+
+def config_fingerprint(cfg):
+    """Stable hash of a genotype (identity for front records)."""
+    return hashlib.sha256(json.dumps(cfg, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def front_fingerprint(items, ref_bytes):
+    """Level-2 signature: sha + zeta of the front record. The convergence
+    signal — a stable front hash across generations means search settled."""
+    rec = front_record(items, ref_bytes)
+    return sha_fingerprint(rec), zeta_fingerprint(rec)
+
+
+def style_crossover(rng, a, b):
+    """Group-level crossover: whole parameter groups move together.
+
+    G1={frac_cap,dmax} (add/sub-side sizes), G2={exp_span,accum}
+    (bridge/softmax side). Child takes one group from each parent —
+    co-adapted pairs travel together, unlike uniform per-key mixing."""
+    import graduate
+    take_a_first = rng.random() < 0.5
+    cfg = {}
+    for gi, group in enumerate(STYLE_GROUPS):
+        src = a if (gi == 0) == take_a_first else b
+        for k in group:
+            cfg[k] = src[k]
+    return graduate.validate_widths(cfg)
