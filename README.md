@@ -123,6 +123,7 @@ original HF model:
 
 ```bash
 git clone <this-repo> && cd dav2_reverse
+python3 -m venv venv && source venv/bin/activate   # recommended (PEP 668 systems require it)
 pip install -r requirements.txt
 python export_geometric_weights.py   # HF download ~94MB, bakes phi npz locally
 python demo_geometric.py             # HF -> geometric figure, expect corr > 0.999
