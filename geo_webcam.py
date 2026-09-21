@@ -143,12 +143,14 @@ def main():
 
     def process_int(rgb_float):
         """Learned integer head: float backbone/neck/convs -> 32ch features,
-        then IntegerPhiHead tree LUT-adds (JIT). Returns (int_depth, float_depth)."""
+        then IntegerPhiHead tree LUT-adds (JIT). Returns
+        (int_depth, float_depth, float_ms, int_ms)."""
         import geo_int as _G
         from geo_depth import preprocess
         pv = preprocess(rgb_float, size=args.size)
         if use_fp16:
             pv = pv.half()
+        t0 = time.perf_counter()
         with torch.no_grad():
             pv_d = pv.to(geo.device)
             fmaps, ph, pw = geo.backbone.forward_stages(pv_d)
@@ -157,15 +159,19 @@ def main():
             feat = geo.head.last_features.squeeze(0).float().permute(1, 2, 0)
             H, W, _ = feat.shape
             flat = feat.reshape(-1, 32).cpu().numpy()
+        t_float = (time.perf_counter() - t0) * 1000
         fs, fe = _G.IntegerPhiHead.encode_features(flat)
         int_flat = int_head.int_predict(fs, fe)
         int_depth = int_flat.reshape(H, W).astype(np.float32)
-        return int_depth, float_depth
+        t_int = (time.perf_counter() - t0) * 1000 - t_float
+        return int_depth, float_depth, t_float, t_int
 
     if args.frames > 0:
         # headless capture test
         corrs = []
         int_corrs = []
+        t_floats = []
+        t_ints = []
         for i in range(args.frames):
             ret, frame = cap.read()
             if not ret:
@@ -174,20 +180,31 @@ def main():
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
             t0 = time.perf_counter()
             if int_head is not None:
-                depth, float_depth = process_int(rgb)
+                depth, float_depth, t_f, t_i = process_int(rgb)
+                t_floats.append(t_f)
+                t_ints.append(t_i)
                 c_if = float(np.corrcoef(depth.flatten().astype(np.float64),
                                          float_depth.flatten().astype(np.float64))[0, 1])
                 int_corrs.append(c_if)
             else:
                 depth = process(rgb)
             ms = (time.perf_counter() - t0) * 1000
-            colored = colorize(depth, COLORMAPS[0][0])
-            colored = cv2.resize(colored, (frame.shape[1], frame.shape[0]))
-            cv2.imwrite(str(outdir / f'geo_webcam_{i}_combined.png'),
-                        np.hstack([frame, colored]))
+            if int_head is not None:
+                fcol = colorize(float_depth, COLORMAPS[0][0])
+                fcol = cv2.resize(fcol, (frame.shape[1], frame.shape[0]))
+                panels = [frame, fcol, colorize(depth, COLORMAPS[0][0])]
+                panels[2] = cv2.resize(panels[2], (frame.shape[1], frame.shape[0]))
+                cv2.imwrite(str(outdir / f'geo_webcam_{i}_combined.png'),
+                            np.hstack(panels))
+            else:
+                colored = colorize(depth, COLORMAPS[0][0])
+                colored = cv2.resize(colored, (frame.shape[1], frame.shape[0]))
+                cv2.imwrite(str(outdir / f'geo_webcam_{i}_combined.png'),
+                            np.hstack([frame, colored]))
             line = f"frame {i}: geo {ms:.0f}ms ({1000 / ms:.1f} FPS) depth{depth.shape}"
             if int_head is not None:
-                line += f"  int-vs-float corr={int_corrs[-1]:.6f}"
+                line += (f"  [float {t_f:.0f}ms | int-head {t_i:.0f}ms]"
+                         f"  int-vs-float corr={int_corrs[-1]:.6f}")
             if hf is not None:
                 from PIL import Image
                 inputs = hf_proc(images=Image.fromarray((rgb * 255).astype(np.uint8)),
@@ -211,6 +228,8 @@ def main():
             print(f"mean HF parity corr: {np.mean(corrs):.6f}")
         if int_corrs:
             print(f"mean int-vs-float corr: {np.mean(int_corrs):.6f}")
+            print(f"mean float-stage: {np.mean(t_floats):.0f}ms | "
+                  f"mean int-head: {np.mean(t_ints):.0f}ms")
         cap.release()
         print(f"saved to {outdir}/geo_webcam_*_combined.png")
         return
@@ -226,21 +245,33 @@ def main():
             break
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
         if int_head is not None:
-            depth, _float_depth = process_int(rgb)
+            depth, float_depth, _tf, _ti = process_int(rgb)
+            fcol = colorize(float_depth, COLORMAPS[cmap_idx][0])
+            fcol = cv2.resize(fcol, (frame.shape[1], frame.shape[0]))
+            icol = colorize(depth, COLORMAPS[cmap_idx][0])
+            icol = cv2.resize(icol, (frame.shape[1], frame.shape[0]))
+            cv2.putText(fcol, "float geo (backbone+neck+head)",
+                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            cv2.putText(icol, "learned int-head (graduated widths)",
+                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            view = np.hstack([frame, fcol, icol])
+            label = "geo-DAV2 learned: camera | float | int-head"
         else:
             depth = process(rgb)
-        colored = colorize(depth, COLORMAPS[cmap_idx][0])
-        colored = cv2.resize(colored, (frame.shape[1], frame.shape[0]))
+            colored = colorize(depth, COLORMAPS[cmap_idx][0])
+            colored = cv2.resize(colored, (frame.shape[1], frame.shape[0]))
+            view = np.hstack([frame, colored])
+            label = "geo-DAV2 (backbone+neck+head)"
         dt = time.perf_counter() - t0
         win.append(dt)
         if len(win) > 30:
             win.pop(0)
         fps = len(win) / sum(win)
-        cv2.putText(colored, f"FPS: {fps:.1f} | {COLORMAPS[cmap_idx][1]}",
+        cv2.putText(view, f"FPS: {fps:.1f} | {COLORMAPS[cmap_idx][1]}",
                     (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(colored, "geo-DAV2 int-head (learned)" if int_head is not None else "geo-DAV2 (backbone+neck+head)",
+        cv2.putText(view, label,
                     (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.imshow('geo-DAV2', np.hstack([frame, colored]))
+        cv2.imshow('geo-DAV2', view)
         key = cv2.waitKey(1) & 0xFF
         if key in (ord('x'), ord('X')):
             break
@@ -248,8 +279,7 @@ def main():
             cmap_idx = (cmap_idx + 1) % len(COLORMAPS)
         elif key in (ord('s'), ord('S')):
             ts = int(time.time())
-            cv2.imwrite(str(outdir / f'geo_webcam_{ts}_combined.png'),
-                        np.hstack([frame, colored]))
+            cv2.imwrite(str(outdir / f'geo_webcam_{ts}_combined.png'), view)
             print(f"saved {outdir}/geo_webcam_{ts}_combined.png")
     cap.release()
     cv2.destroyAllWindows()
