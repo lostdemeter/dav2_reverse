@@ -694,7 +694,241 @@ def int_softmax_fixed(s, e, z):
     return num, den
 
 
+# ---------------------------------------------------------------------------
+# Full integer transformer layer (fixed-point datapath, runtime integer).
+#
+# Strategy (standard quantized-inference practice, phi-compressed weights):
+# bake phi triples -> absolute fixed-point int64 matrices ONCE (offline),
+# then the whole layer runs in fixed 2**14: LN (int mean/var/isqrt/div),
+# QKV/out-proj/MLP (int64 MACs + rounding shift), attention scores,
+# stable softmax via EXP_LUT (stays fixed for attn@V), GELU via bounded
+# LUT, layer-scale multiplies, residuals. from_fixed/decode only for
+# display/parity. No exp/log/sqrt/div-float/pow anywhere at runtime
+# (math.isqrt is integer bit arithmetic).
+# ---------------------------------------------------------------------------
+
+INT_F = 14
+INT_S = 1 << INT_F
+_GELU_LUT = None
+_GELU_SPAN = 8  # covers [-8, +8]; asymptotes beyond
+
+
+def _get_gelu_lut():
+    """GELU_LUT[i] = round(gelu((i - SPAN*2**F)/2**F) * 2**F). Offline."""
+    global _GELU_LUT
+    import math
+    if _GELU_LUT is None:
+        n = 2 * _GELU_SPAN * INT_S + 1
+        lut = np.zeros(n, dtype=np.int32)
+        for k in range(n):
+            x = (k - _GELU_SPAN * INT_S) / INT_S
+            # exact gelu via erf (offline floats OK)
+            g = 0.5 * x * (1.0 + math.erf(x / math.sqrt(2.0)))
+            lut[k] = int(round(g * INT_S))
+        _GELU_LUT = lut
+    return _GELU_LUT
+
+
+def _phi_to_fixed14(s, e):
+    """Offline bake helper: phi triple arrays -> absolute fixed 2**14 int64."""
+    abs_lut = _get_abs_lut()  # 2**-_ABS_F units; _ABS_F == _EXP_F == INT_F
+    assert _ABS_F == INT_F
+    return (np.asanyarray(s, dtype=np.int8).astype(np.int64)
+            * abs_lut[np.clip(np.asanyarray(e, dtype=np.int32), 0, N_LEVELS - 1)])
+
+
+def bake_layer_fixed(npz_path, layer: int = 0):
+    """Bake one backbone layer's phi weights -> fixed-point int64 dict."""
+    baked = load_baked_ints(npz_path)
+    p = f'layer{layer}.'
+    out = {}
+    for name in ('q.weight', 'k.weight', 'v.weight', 'proj.weight',
+                 'mlp1.weight', 'mlp2.weight'):
+        s, e = baked[p + name]
+        out[name] = _phi_to_fixed14(s, e).reshape(
+            {'q.weight': (384, 384), 'k.weight': (384, 384),
+             'v.weight': (384, 384), 'proj.weight': (384, 384),
+             'mlp1.weight': (1536, 384), 'mlp2.weight': (384, 1536)}[name])
+    for name in ('q.bias', 'k.bias', 'v.bias', 'proj.bias',
+                 'mlp1.bias', 'mlp2.bias',
+                 'norm1.weight', 'norm1.bias', 'norm2.weight', 'norm2.bias',
+                 'ls1', 'ls2'):
+        s, e = baked[p + name]
+        out[name] = _phi_to_fixed14(s, e).reshape(-1)
+    return out
+
+
+def int_linear_fixed(X, W, b):
+    """Integer: Y = (X @ W.T + 2**(F-1)) >> F + b. X:(N,Di), W:(Do,Di), b:(Do,)."""
+    acc = X.astype(np.int64) @ W.astype(np.int64).T  # 2**(2F) scale
+    Y = ((acc + (1 << (INT_F - 1))) >> INT_F).astype(np.int64)
+    return Y + b
+
+
+def int_layernorm_affine(X, w, b, eps: float = 1e-6):
+    """Integer LayerNorm+affine. X:(N,D) fixed 2**F. Returns fixed 2**F."""
+    import math
+    N, D = X.shape
+    Y = np.empty_like(X)
+    eps_i = int(eps * (1 << (2 * INT_F)) + 0.5)
+    for n in range(N):
+        row = X[n].astype(np.int64)
+        mean = (int(np.sum(row)) + D // 2) // D
+        c = row - mean
+        var = (int(np.sum(c * c)) + D // 2) // D + eps_i
+        std = math.isqrt(var)
+        if std == 0:
+            Y[n] = b
+            continue
+        norm = (c * (1 << INT_F) + (std // 2)) // std
+        Y[n] = ((norm * w + (1 << (INT_F - 1))) >> INT_F) + b
+    return Y.astype(np.int64)
+
+
+def int_gelu_fixed(X):
+    """Integer GELU via bounded LUT. X fixed 2**F -> fixed 2**F."""
+    lut = _get_gelu_lut()
+    span = _GELU_SPAN * INT_S
+    idx = np.clip(X.astype(np.int64) + span, 0, lut.shape[0] - 1)
+    lo = X < -span
+    hi = X > span
+    Y = lut[idx].astype(np.int64)
+    Y = np.where(lo, 0, Y)       # gelu -> 0 far left
+    Y = np.where(hi, X, Y)       # gelu -> x far right
+    return Y
+
+
+def int_softmax_fixedvals(Q):
+    """Integer stable softmax over rows of absolute fixed-point Q.
+
+    Returns (num (...,N) int64 scale 2**_EXP_G, den (...) int) for direct
+    fixed-point downstream MACs: attn@V = sum(num*V) // den.
+    """
+    exp_lut = _get_exp_lut()
+    Q = np.asanyarray(Q, dtype=np.int64)
+    vmax = np.max(Q, axis=-1, keepdims=True)
+    dd = np.clip(vmax - Q, 0, exp_lut.shape[0] - 1)
+    num = exp_lut[dd]
+    den = np.sum(num, axis=-1, dtype=np.int64)
+    return num, den
+
+
+def int_attention_fixed(X, W, heads: int = 6):
+    """Integer 6-head self-attention. X:(N,384) fixed -> (N,384) fixed."""
+    N, D = X.shape
+    hd = D // heads
+    Q = int_linear_fixed(X, W['q.weight'], W['q.bias'])
+    K = int_linear_fixed(X, W['k.weight'], W['k.bias'])
+    V = int_linear_fixed(X, W['v.weight'], W['v.bias'])
+    outs = []
+    for h in range(heads):
+        q = Q[:, h * hd:(h + 1) * hd]
+        k = K[:, h * hd:(h + 1) * hd]
+        v = V[:, h * hd:(h + 1) * hd]
+        scores = (q.astype(np.int64) @ k.astype(np.int64).T
+                  + (1 << (INT_F - 1))) >> INT_F   # 2**F scale
+        scores = scores // 8                        # /sqrt(64), integer
+        num, den = int_softmax_fixedvals(scores)    # 2**G scale
+        den = np.where(den == 0, 1, den)
+        # (2**G @ 2**F) // 2**G -> 2**F scale. Exact integer bookkeeping.
+        o = (num.astype(np.int64) @ v.astype(np.int64)) // den[..., None]
+        outs.append(o)
+    O = np.concatenate(outs, axis=1)
+    return int_linear_fixed(O, W['proj.weight'], W['proj.bias'])
+
+
+def int_transformer_layer_fixed(X, W):
+    """Full integer transformer layer (DINOV2 order). X:(N,384) fixed 2**F."""
+    h = int_layernorm_affine(X, W['norm1.weight'], W['norm1.bias'])
+    a = int_attention_fixed(h, W)
+    x = X + (a * W['ls1'] + (1 << (INT_F - 1))) // (1 << INT_F)
+    h2 = int_layernorm_affine(x, W['norm2.weight'], W['norm2.bias'])
+    m = int_linear_fixed(h2, W['mlp1.weight'], W['mlp1.bias'])
+    m = int_gelu_fixed(m)
+    m = int_linear_fixed(m, W['mlp2.weight'], W['mlp2.bias'])
+    return (x + (m * W['ls2'] + (1 << (INT_F - 1))) // (1 << INT_F)).astype(np.int64)
+
+
+def transformer_layer_parity(size: int = 112):
+    """Full integer transformer layer vs HF DINOv2 layer0, stage-wise.
+
+    Input: real HF embeddings (float->fixed boundary); everything after
+    is integer. (Note: the HF processor upscales to 518, so this runs at
+    the full 1370 tokens.) Reports attn-block / mlp-block / full-layer
+    corr. Pass: full > 0.99.
+    """
+    import torch
+    from transformers import AutoModelForDepthEstimation, AutoImageProcessor
+    from PIL import Image
+
+    gx, gy = np.meshgrid(np.linspace(0, 1, size, dtype=np.float32),
+                         np.linspace(0, 1, size, dtype=np.float32))
+    rgb = np.stack([gx, gy, np.full((size, size), 0.5, dtype=np.float32)], axis=-1)
+    proc = AutoImageProcessor.from_pretrained(
+        'depth-anything/Depth-Anything-V2-Small-hf')
+    model = AutoModelForDepthEstimation.from_pretrained(
+        'depth-anything/Depth-Anything-V2-Small-hf').eval()
+    bb = model.backbone
+    layer = bb.encoder.layer[0]
+    pil = Image.fromarray((rgb * 255).astype(np.uint8))
+    pv = proc(images=pil, return_tensors='pt')['pixel_values']
+
+    got = {}
+
+    def hk(name):
+        def fn(mod, inp, out):
+            got[name] = out[0].detach() if isinstance(out, tuple) else out.detach()
+        return fn
+
+    h1 = layer.register_forward_hook(lambda m, i, o: got.__setitem__(
+        'full', o[0].detach() if isinstance(o, tuple) else o.detach()))
+    h2 = layer.layer_scale1.register_forward_hook(
+        lambda m, i, o: got.__setitem__('attn_scaled', o.detach()))
+    h3 = layer.layer_scale2.register_forward_hook(
+        lambda m, i, o: got.__setitem__('mlp_scaled', o.detach()))
+    with torch.no_grad():
+        emb = bb.embeddings(pv)
+        _ = layer(emb)
+    h1.remove()
+    h2.remove()
+    h3.remove()
+    print(f"  layer0 in/out: {emb.shape} -> {got['full'].shape}")
+
+    W = bake_layer_fixed(Path(__file__).parent / 'weights' / 'geometric_backbone.npz', 0)
+    X = np.round(emb.squeeze(0).numpy().astype(np.float64) * INT_S).astype(np.int64)
+
+    def stage(tag, int_arr, ref_t):
+        ref = ref_t.squeeze(0).numpy().astype(np.float64)
+        mine = (int_arr.astype(np.float64) / INT_S)
+        c = float(np.corrcoef(mine.flatten(), ref.flatten())[0, 1])
+        print(f"  [{tag}] corr={c:.6f}")
+        return c
+
+    # integer path with intermediates
+    h = int_layernorm_affine(X, W['norm1.weight'], W['norm1.bias'])
+    a = int_attention_fixed(h, W)
+    a_scaled = (a * W['ls1'] + (1 << (INT_F - 1))) // (1 << INT_F)
+    c1 = stage('attn block', a_scaled, got['attn_scaled'])
+    x = X + a_scaled
+    h2 = int_layernorm_affine(x, W['norm2.weight'], W['norm2.bias'])
+    m = int_linear_fixed(h2, W['mlp1.weight'], W['mlp1.bias'])
+    m = int_gelu_fixed(m)
+    m = int_linear_fixed(m, W['mlp2.weight'], W['mlp2.bias'])
+    c2 = stage('mlp block', (m * W['ls2'] + (1 << (INT_F - 1))) // (1 << INT_F),
+               got['mlp_scaled'])
+    full = int_transformer_layer_fixed(X, W)
+    c3 = stage('full layer0', full, got['full'])
+    ok = c3 > 0.99
+    print("  LAYER:", "PASS" if ok else "FAIL")
+    return ok
+
+
 def neck_conv_parity(geo, add_lut, sub_lut, size: int = 238):
+    """Integer neck convs vs float: reassemble 1x1 -> 3x3 -> fusion 3x3+ReLU.
+
+    Chains integer-to-integer (no float round-trip between stages).
+    Returns True if all stages pass corr > 0.999.
+    """
     """Integer neck convs vs float: reassemble 1x1 -> 3x3 -> fusion 3x3+ReLU.
 
     Chains integer-to-integer (no float round-trip between stages).
@@ -945,7 +1179,10 @@ def main():
     results.append(deconv_parity())
     results.append(softmax_parity())
     print("BRIDGE/RESAMPLE/ATTN:", "PASS" if all(results) else "FAIL")
-    print("OVERALL:", "PASS" if (corr > 0.999 and ok_neck and all(results)) else "FAIL")
+    print("integer transformer layer0 vs HF...")
+    ok_layer = transformer_layer_parity()
+    print("OVERALL:", "PASS" if (corr > 0.999 and ok_neck and all(results)
+                                 and ok_layer) else "FAIL")
 
 
 if __name__ == '__main__':

@@ -173,9 +173,14 @@ bridge (`to_fixed`/`from_fixed`, 15-bit mantissa, offline FRAC/COARSE/
 FINE LUTs) adds the resampling + attention core with zero FPU at
 runtime: bridge roundtrip 1.000000, bilinear ×2 interp 0.999704,
 non-overlapping deconv (re1 k2/s2, real weights) 0.999970, 290-way
-stable softmax 1.000000. Remaining integer gaps: overlapping
-deconv/stride-conv via the same fixed canvas, LayerNorm/GELU as bounded
-integer LUTs, full integer transformer layer. Honest boundaries:
+stable softmax 1.000000. The summit — a **full integer transformer
+layer** (LayerNorm via int mean/var/`isqrt`/division, QKV/out-proj/MLP
+as int64 MACs, attention softmax staying fixed-point through attn@V,
+GELU via bounded LUT, layer-scales, residuals; baked phi weights →
+absolute fixed-point once, offline) — matches HF DINOv2 layer0 at full
+1370-token resolution: attn block 0.999999, MLP block 0.999999, full
+layer 0.999996. Remaining integer gaps: overlapping deconv/stride-conv
+on the fixed canvas (same machinery applies). Honest boundaries:
 feature *encoding* (float→int) and final decode-for-display still use
 floats — on FPU-free hardware the sensor front-end would emit
 fixed-point ints with an integer encode LUT (future work), as would the
