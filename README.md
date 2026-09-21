@@ -179,8 +179,12 @@ as int64 MACs, attention softmax staying fixed-point through attn@V,
 GELU via bounded LUT, layer-scales, residuals; baked phi weights →
 absolute fixed-point once, offline) — matches HF DINOv2 layer0 at full
 1370-token resolution: attn block 0.999999, MLP block 0.999999, full
-layer 0.999996. Remaining integer gaps: overlapping deconv/stride-conv
-on the fixed canvas (same machinery applies). Honest boundaries:
+layer 0.999996. `geo_jit.py` ports the hot loops to Numba (same integer
+ops, bit-exact): head 27µs/px → 0.1µs/px (~368× with `prange`),
+`from_fixed` 1.5µs/el → 0.011µs/el (~130×); the gcc C port
+(`phi_avx512.c` precedent) stays future work for real embedded targets.
+Remaining integer gaps: overlapping deconv/stride-conv on the fixed
+canvas (same machinery applies). Honest boundaries:
 feature *encoding* (float→int) and final decode-for-display still use
 floats — on FPU-free hardware the sensor front-end would emit
 fixed-point ints with an integer encode LUT (future work), as would the
@@ -204,6 +208,7 @@ phi-depth/
 ├── geo_depth.py           # End-to-end geometric DAV2 (no transformers)
 ├── geo_webcam.py          # Live fully-geometric webcam test (--cpu for CPU-only)
 ├── geo_int.py             # Integer-only (no-FPU) phi core + head prototype
+├── geo_jit.py             # Numba-JIT integer hot loops (bit-exact, 100x+)
 ├── export_geometric_weights.py  # One-time HF->phi bake (builds gitignored npz)
 ├── test_geometric_parity.py     # Parity suite (corr > 0.999)
 ├── demo_geometric.py            # HF->geometric demo figure (no webcam)
