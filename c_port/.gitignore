@@ -1,4 +1,5 @@
 generated/
 test_phi_int
 test_fib
+test_fixed_nn
 __pycache__/

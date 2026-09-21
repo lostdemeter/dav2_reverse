@@ -155,3 +155,32 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   domain owns the backend. That separation is what makes the pattern
   reusable: any adapter with a serializable artifact + a kernel
   registry gets deployment for free.
+
+## 2026-09-21 — fixed-bridge C + backbone kernels (all bit-exact)
+
+- New `fixed_nn.{h,c}`: fixed_dot, rescale, head_fixed, linear,
+  layernorm (+isqrt), GELU-vec. `make test` → **C FIXED-NN: ALL PASS**
+  with 0 mismatches everywhere incl. 1536 layernorm outputs at real
+  384 width; head_fixed corr 0.999851 vs float refs.
+- The one real trap, handled explicitly: Python `//`/`>>` floor toward
+  −inf, C truncates. Every negative-capable site uses floor_div /
+  floor_div128 / Newton isqrt; sums wrap mod 2^64 via uint64_t
+  (identical to numpy int64); head dot uses __int128 (matches Python's
+  unbounded ints at these sizes). Bounds documented in the header.
+- Debugging note: the first fixed_dot run failed 7/8 — and the C code
+  was RIGHT. The generator had flattened all cases into one max-scale
+  group while the kernel (correctly) uses per-dot max. Generators must
+  call the exact function under test (`fixed_dot_terms` on (T,1)), not
+  a hand-rolled equivalent. Same lesson as the k-bug: test the path,
+  not a lookalike.
+- Emitter now covers fixed too (`EMIT-FIXED: ALL PASS`, 0/64): full
+  FRAC/COARSE/FINE + ADD/SUB/EXP as PHI_* definitions linking in place
+  of luts.c, tested via fixed_nn.c's phi_head_fixed. Narrowed fixed
+  linking stays open (kernels bind full-size externs) — manifest
+  records narrowed targets vs actuals explicitly.
+- On "fully learned (head, neck, backbone)": current learned surface
+  is widths + neck/head architecture; backbone weights remain baked
+  replicas. The C kernels above are the prerequisite either way
+  (a learned backbone still executes through linear/norm/gelu). Next
+  learning step proposed: backbone stage/scale search in the DSL —
+  not started; saying so plainly rather than implying it.

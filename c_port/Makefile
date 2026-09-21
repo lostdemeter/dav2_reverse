@@ -16,12 +16,19 @@ test_phi_int: phi_int.c generated/luts.c test_phi_int.c generated/luts.h generat
 test_fib: phi_int.c fib_solve.c generated/luts.c test_fib.c generated/luts.h generated/test_vectors.h
 	$(CC) $(CFLAGS) -o test_fib phi_int.c fib_solve.c generated/luts.c test_fib.c $(LDFLAGS)
 
-test: test_phi_int test_fib
+generated/test_fixed_nn.h: gen_fixed_vectors.py ../weights/geometric_backbone.npz
+	python3 gen_fixed_vectors.py
+
+test_fixed_nn: phi_int.c fixed_nn.c generated/luts.c test_fixed_nn.c generated/luts.h generated/test_fixed_nn.h
+	$(CC) $(CFLAGS) -o test_fixed_nn phi_int.c fixed_nn.c generated/luts.c test_fixed_nn.c $(LDFLAGS)
+
+test: test_phi_int test_fib test_fixed_nn
 	./test_phi_int
 	./test_fib
+	./test_fixed_nn
 
 clean:
-	rm -f test_phi_int test_fib
+	rm -f test_phi_int test_fib test_fixed_nn
 	rm -rf generated __pycache__
 
 .PHONY: all test clean
