@@ -45,7 +45,7 @@ from experimenter import Scorecard, Measurement, PromotionRule
 LATEST = None
 
 
-def _meas(exp_c, exp_t, gate_c, gate_t, ret_ok, ret_t, nbytes):
+def _meas(exp_c, exp_t, gate_c, gate_t, ret_ok, ret_t, nbytes, mean=0.9995):
     def card(ds, c, t, ok_list=None):
         cases = []
         for i in range(t):
@@ -56,7 +56,8 @@ def _meas(exp_c, exp_t, gate_c, gate_t, ret_ok, ret_t, nbytes):
     exp = card("e", exp_c, exp_t)
     gate = card("g", gate_c, gate_t)
     ret = card("r", ret_ok, ret_t)
-    return Measurement(exp, gate, ret, nbytes, {})
+    diags = {r: {"mean_corr": mean} for r in ("exploration", "gate", "retention")}
+    return Measurement(exp, gate, ret, nbytes, diags)
 
 
 base = PromotionRule()
@@ -91,11 +92,27 @@ check(d["action"] == "PROMOTE" and d["reasons"] != ["efficiency_gain_bytes"],
 # baseline with no incumbent
 check(rule.compare(tie_small, None)["action"] == "BASELINE",
       "no-incumbent baseline passes through")
+# margin-aware gate: tie + fewer bytes but mean_corr drops > margin -> rejected
+thin = _meas(5, 6, 4, 4, 3, 3, 900, mean=0.9995 - 0.001)
+d = rule.compare(thin, inc)
+check(d["action"] == "REJECT" and d["reasons"] == ["margin_regressed:exploration"],
+      "mean drop beyond margin blocks efficiency promotion")
+# margin-aware gate: drop within margin still promotes
+close = _meas(5, 6, 4, 4, 3, 3, 900, mean=0.9995 - 0.0001)
+d = rule.compare(close, inc)
+check(d["action"] == "PROMOTE" and d["reasons"] == ["efficiency_gain_bytes"],
+      "mean drop within margin still promotes")
+# bad margin value rejected at construction
+try:
+    EfficiencyRule(corr_margin=-1.0)
+    check(False, "negative margin rejected")
+except ValueError:
+    check(True, "negative margin rejected")
 
 from graduate import validate_widths, table_bytes, neighbor_widths, SEED as WSEED
 w = validate_widths(dict(WSEED))
 check(w == WSEED, "width seed validates")
-check(table_bytes(w) == 1134608, f"seed tables = 1134608B (got {table_bytes(w)})")
+check(table_bytes(w) == 1081356, f"seed tree tables = 1081356B (got {table_bytes(w)})")
 for bad in ({"frac_cap": 999, "exp_span": 16, "dmax": 4096, "accum": "tree"},
             {"frac_cap": 8192, "exp_span": 7, "dmax": 4096, "accum": "tree"},
             {"frac_cap": 8192, "exp_span": 8, "dmax": 4096, "accum": "lut"}):
@@ -109,6 +126,12 @@ check(len(wm) == 3 + 2 + 1 + 1, f"width seed has 7 moves (got {len(wm)})")
 ids = [TrialSpec(f"w{i}", dict(c), r).identifier for i, (c, r) in enumerate(wm)]
 check(len(set(ids)) == len(ids), "width neighbors unique")
 tgt = {"frac_cap": 8192, "exp_span": 8, "dmax": 4096, "accum": "tree"}
-check(table_bytes(tgt) == 589840, f"target 576kB tables (got {table_bytes(tgt)})")
+check(table_bytes(tgt) == 557068, f"exp-halved tree tables (got {table_bytes(tgt)})")
+# honesty: frac moves under tree change nothing (evaluator can't see them)
+same = dict(tgt, frac_cap=2048)
+check(table_bytes(same) == table_bytes(tgt),
+      "frac width unread by tree costs zero bytes either way")
+fixed = dict(WSEED, accum="fixed")
+check(table_bytes(fixed) == 1200916, f"seed fixed tables (got {table_bytes(fixed)})")
 print("SMOKE:", "PASS" if fails == 0 else "FAIL")
 raise SystemExit(1 if fails else 0)

@@ -104,3 +104,32 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   end-to-end test caught what the parity suites couldn't, because the
   suites never exercised the assignment path. New-behavior demos should
   run before results are written up, not after.
+
+## 2026-09-21 — round two: honest bytes + margin gates + hard anchors
+
+- Anchor mining (`adapt/harden_anchors.py`, 40 fresh scenes, seed vs
+  narrowed integer-tree scores): ALL gaps exactly +0.00000, and no scene
+  cleared the 0.9995 seed bar. This is not a failed mining run — it is
+  the no-op diagnosis confirmed empirically: tree evaluation never
+  reads FRAC tables, so frac_cap is unobservable by construction. Kept
+  zero anchors; kept the script as the method record.
+- Honesty fix (`table_bytes` now counts only tables the accum path
+  reads; EXP counted in both as shared attention cost): frac moves under
+  tree change 0 bytes and correctly can't promote. This is the ROADMAP
+  principle "measure complete costs" applied to the artifact itself.
+- Margin gate (`corr_margin` 2e-4 on per-role mean_corr diagnostics,
+  base `__post_init__` overridden explicitly since it only allows ints):
+  armed, 3 new smoke tests green — and NOT exercised this run (no
+  `margin_regressed` verdicts), which is itself reported, not hidden.
+- Re-run outcome: incumbent **{13312,8,4096} tree, 557,068 B** — the
+  genuine win is EXP halving (probe still passes), frac correctly
+  unpromotable, dmax→1024 rejected on retention-0, fixed rejected
+  (+119,560 B, no gain). Audit 0.9948–0.9979 (same integer path as
+  before, deterministic). No overshoot: the objective now sees what the
+  evaluator sees.
+- MID-RANGE GOAL (agreed): C emitter — TrialSpec DSL as intermediate
+  language, artifact JSON → kernel registry → `model.c` against
+  `phi_int.c`/`fib_solve.c`, emission gated on sealed incumbents only,
+  bit-exact host tests per kernel. Learn more first (this round), emit
+  second. The honest-bytes accounting is already the emitter's cost
+  model.

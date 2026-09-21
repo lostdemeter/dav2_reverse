@@ -49,9 +49,19 @@ def validate_widths(cfg):
 
 
 def table_bytes(cfg):
-    """Shippable int32 LUT bytes for a width config (125B head const excluded)."""
-    return ((cfg["dmax"] + 1) * 4 * 2 + (cfg["frac_cap"] + 1) * 4
-            + (cfg["exp_span"] * (1 << 14) + 1) * 4)
+    """Shippable int32 LUT bytes for a width config (125B head const excluded).
+
+    Round-two honesty fix: count ONLY tables the accum path actually reads.
+    Tree evaluation never touches FRAC/COARSE/FINE, so frac moves under
+    tree change 0 bytes and correctly can't promote (a DSL dimension the
+    evaluator can't see must not count as savings). EXP is counted in both
+    as shared attention cost (softmax probe + backbone attention need it).
+    """
+    addsub = (cfg["dmax"] + 1) * 4 * 2
+    exp = (cfg["exp_span"] * (1 << 14) + 1) * 4
+    if cfg["accum"] == "tree":
+        return addsub + exp
+    return ((cfg["frac_cap"] + 1) * 4 + 193 * 4 + 16384 * 4 + addsub + exp)
 
 
 def neighbor_widths(cfg):
@@ -228,6 +238,17 @@ def load_all(device):
                              interpolation=cv2.INTER_LINEAR)
             items.append((rgb, ref, f"{role}-{i}"))
         fixtures[role] = items
+    # Round-two hardened anchors merge into retention (never exploration:
+    # anchors protect, they don't steer proposals).
+    hard_path = ADAPT / 'fixtures' / 'hard_anchors.npz'
+    if hard_path.exists():
+        zh = np.load(hard_path, allow_pickle=False)
+        for i in range(len(zh['rgb'])):
+            rgb = zh['rgb'][i].astype(np.float32) / 255.0
+            ref = cv2.resize(zh['ref'][i].astype(np.float64), (grid, grid),
+                             interpolation=cv2.INTER_LINEAR)
+            fixtures['retention'].append((rgb, ref, str(zh['ids'][i])))
+        print(f"merged {len(zh['rgb'])} hardened retention anchors")
     rng = np.random.default_rng(7)
     logits = (rng.standard_normal(290) * 1.5 - 2.0).astype(np.float64)
     logits[rng.choice(290, 4, replace=False)] += 6.0

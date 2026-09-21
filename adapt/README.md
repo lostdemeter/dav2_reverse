@@ -72,6 +72,14 @@ Rejections all correct: exp→4 dies on the softmax probe, dmax→1024 and
 accum→fixed both lose retention-0. Details + library lessons in
 `adapt/NOTES.md`.
 
+Round two (same day): anchor mining over 40 fresh scenes found all
+seed-vs-narrow gaps exactly 0.00000 — proving frac_cap unobservable
+under tree evaluation (no-op dimension). Fix: `table_bytes` counts only
+tables the accum path reads. Re-run lands **{13312,8,4096} tree,
+557,068 B**: EXP halving promotes (probe passes), frac correctly
+unpromotable, dmax→1024 and fixed correctly rejected. Margin gate
+(`corr_margin` 2e-4) armed but unexercised — reported, not hidden.
+
 ## LUT-width Pareto (`python adapt/lut_pareto.py`)
 
 FRAC_CAP × EXP span × ADD/SUB DMAX vs head/conv/softmax corr + shippable
