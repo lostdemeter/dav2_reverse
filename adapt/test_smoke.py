@@ -33,7 +33,7 @@ for bad in ({}, {"readout": 9, "res_scales": [0, 0, 0, 0], "head": "geo-conv"},
         check(True, f"rejects {bad}")
 
 moves = neighbor_configs(seed)
-check(len(moves) == 1 + 3 + 8, f"seed has 12 neighbors (got {len(moves)})")
+check(len(moves) == 2 + 3 + 8, f"seed has 13 neighbors (got {len(moves)})")
 specs = [TrialSpec(f"m{i}", dict(c), r) for i, (c, r, _p) in enumerate(moves)]
 check(len({s.identifier for s in specs}) == len(specs), "neighbor identifiers unique")
 check(all(validate_config(dict(s.config)) == dict(s.config) for s in specs),

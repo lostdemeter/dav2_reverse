@@ -133,3 +133,25 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   bit-exact host tests per kernel. Learn more first (this round), emit
   second. The honest-bytes accounting is already the emitter's cost
   model.
+
+## 2026-09-21 — both tracks: emitter scaffold + analytic candidate
+
+- EMITTER (`adapt/emit_c.py`): sealed width artifact → narrowed
+  ADD/SUB/EXP tables + head (sign,exp) vectors + size-aware head loop +
+  manifest, compiled against the 64px vectors: **0/64 bit-exact, EMIT:
+  ALL PASS**, 544 kB emitted for the {13312,8,4096} incumbent. The
+  size-aware `phi_add` copy is labeled as honest duplication with the
+  unification path named (parameterize `phi_int.c` by table size).
+  Emission refuses non-width configs and non-tree accums loudly —
+  scaffolds should fail closed.
+- ANALYTIC CANDIDATE (architecture DSL +1 move: zero-weight
+  edge/texture/perspective head, 0 fitted bytes): tried trial 3,
+  rejected on EVERY gate (exploration -6, gate -4, all retention lost).
+  The gates treat a qualitatively different candidate correctly — big
+  savings can't buy failed accuracy. Seed space now 13 neighbors.
+- LIBRARY (for the eventual upstream note): this pair is the
+  "search → ship" loop in miniature — the same JSON the gates judged
+  is the JSON the emitter compiles. The foundry never sees C; the
+  domain owns the backend. That separation is what makes the pattern
+  reusable: any adapter with a serializable artifact + a kernel
+  registry gets deployment for free.

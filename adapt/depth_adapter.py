@@ -23,7 +23,7 @@ from experimenter import (  # noqa: E402
 CORR_PASS = 0.999
 READOUTS = (0, 1, 2, 3)
 SCALE_LO, SCALE_HI = -2, 2
-HEADS = ("geo-conv", "direct")
+HEADS = ("geo-conv", "direct", "analytic")
 
 SEED_CONFIG = {"readout": 3, "res_scales": [0, 0, 0, 0], "head": "geo-conv"}
 
@@ -53,6 +53,8 @@ def neighbor_configs(cfg):
     if cfg["head"] == "geo-conv":
         c = dict(cfg, head="direct")
         out.append((c, "direct 64->1 head avoids the full conv stack", 10))
+        c = dict(cfg, head="analytic")
+        out.append((c, "analytic zero-weight head (edge/texture/perspective, PHI powers)", 15))
     else:
         c = dict(cfg, head="geo-conv")
         out.append((c, "full geometric head restores conv context", 10))
@@ -120,6 +122,9 @@ def run_pipeline(shared, config, rgb_list, fit_explore=None):
 
     depths = []
     for rgb in rgb_list:
+        if config['head'] == 'analytic':
+            depths.append(_analytic_predict(rgb))
+            continue
         pv = preprocess(rgb).to(device)
         with torch.no_grad():
             fmaps, ph, pw = backbone.forward_stages(pv)
@@ -131,6 +136,20 @@ def run_pipeline(shared, config, rgb_list, fit_explore=None):
                 d = _direct_predict(shared, fit_explore, h, ph, pw)
             depths.append(d.squeeze(0).cpu().numpy())
     return depths
+
+
+def _analytic_predict(rgb):
+    """Zero-learned-weight geometric head (experimental_decoder tradition).
+
+    Edge/texture/color/perspective cues with PHI^0,-1,-2,-3 weights.
+    No fitted parameters — the no-learning limit probe.
+    """
+    import numpy as np
+    import sys
+    sys.path.insert(0, str(_ADAPT.parent))
+    from geo_head import AnalyticHead
+    gray = np.asanyarray(rgb, dtype=np.float64)[..., :3].mean(axis=-1)
+    return AnalyticHead()(gray).astype(np.float64)
 
 
 def _direct_predict(shared, fit, h, ph, pw):

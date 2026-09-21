@@ -22,8 +22,10 @@ branch and does not touch `main` or the upstream foundry repo.
 - `readout` 0..3 — which fused neck stage feeds the head (3 = exact replication).
 - `res_scales` — four ints in [-2, 2]: phi-exponent scalings (`×φ^e`) of the
   four fusion residual branches (all 0 = exact replication).
-- `head` — `geo-conv` (full geometric head) or `direct` (64→1 linear fitted
-  by least squares on exploration data, the `fit_weights.py` idea at 64ch).
+- `head` — `geo-conv` (full geometric head), `direct` (64→1 linear fitted
+  by least squares on exploration data, the `fit_weights.py` idea at 64ch),
+  or `analytic` (zero-weight edge/texture/perspective head — the
+  no-learning limit probe; correctly rejected on all gates).
 
 Seed = exact replication. `propose()` enumerates single moves
 (readout±1, one scale ±1, head flip) with rationale; the core's
@@ -36,7 +38,9 @@ learner exactly as the foundry roadmap asks for.
 ```bash
 python adapt/build_fixtures.py   # one-time: HF oracle renders refs (needs baked weights + HF)
 python adapt/test_smoke.py       # fast: DSL + neighbor enumeration, no torch
-python adapt/run_search.py       # full search (GPU recommended)
+python adapt/run_search.py       # architecture search (GPU recommended)
+python adapt/graduate.py         # LUT-width search under EfficiencyRule
+python adapt/emit_c.py           # emit C model from sealed incumbent (bit-exact test)
 ```
 
 Fixtures (`adapt/fixtures/`, gitignored): 6 exploration + 4 gate scenes,
