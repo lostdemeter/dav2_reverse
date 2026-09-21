@@ -6,10 +6,17 @@ Runs every frame through:
 (phi-encoded weights + LUT, baked in weights/geometric_*.npz —
  no `transformers` / HF download at inference).
 
+Learned integer-head mode (--int-head) swaps the final float conv3 for
+the graduated integer head (adapt/runs/graduation.json widths): backbone
++neck+head-convs stay float to produce 32ch features, then
+IntegerPhiHead (tree LUT-adds, JIT) predicts depth with zero FPU in the
+accumulation. This is the adaptation-foundry learned artifact running live.
+
 Usage:
     python geo_webcam.py                  # interactive GUI (M/S/X like phi_depth.py)
     python geo_webcam.py --frames 5       # headless: capture 5 frames, save to captures/
     python geo_webcam.py --frames 5 --compare-hf   # also run HF baseline for parity
+    python geo_webcam.py --int-head --frames 5     # learned integer head live test
 
 Controls (interactive): [M] colormap  [S] save  [X] quit
 """
@@ -54,6 +61,10 @@ def main():
                     help='force CPU-only (no GPU needed, slower, smaller default size)')
     ap.add_argument('--size', type=int, default=None,
                     help='input long side (default 518, use 364/336 on CPU for speed)')
+    ap.add_argument('--int-head', action='store_true',
+                    help='use learned integer head (graduated widths) instead of float conv3')
+    ap.add_argument('--widths-json', type=str, default='adapt/runs/graduation.json',
+                    help='graduation incumbent JSON (default: adapt/runs/graduation.json)')
     args = ap.parse_args()
 
     if args.size is None:
@@ -70,6 +81,33 @@ def main():
                 mod._w[k] = v.half()
     geo.eval()
     print("ready.")
+
+    int_head = None
+    int_cfg = None
+    if args.int_head:
+        import json as _json
+        import geo_int as _G
+        from geo_int import IntegerPhiHead
+        wpath = Path(args.widths_json)
+        if wpath.exists():
+            int_cfg = _json.load(open(wpath))['incumbent']['config']
+            print(f"learned widths: {int_cfg}")
+        else:
+            int_cfg = {"frac_cap": 2048, "exp_span": 8, "dmax": 4096, "accum": "tree"}
+            print(f"no {wpath}, using fallback widths {int_cfg}")
+        if int_cfg.get("accum", "tree") != "tree":
+            print("warning: live int-head supports tree accum only "
+                  f"(graduated={int_cfg.get('accum')}); using tree tables")
+        # Patch global DMAX used by phi_add clipping + rebuild head LUTs.
+        # frac_cap/exp_span are fixed-bridge widths (no-op for tree) — logged
+        # for provenance; the byte savings they represent ship in the tables.
+        _G.DMAX = int(int_cfg["dmax"])
+        int_head = IntegerPhiHead(Path(__file__).parent / 'weights' / 'phi_weights_compact.bin')
+        int_head.add_lut = _G.build_add_lut(dmax=int(int_cfg["dmax"]))
+        int_head.sub_lut = _G.build_sub_lut(dmax=int(int_cfg["dmax"]))
+        print(f"integer head ready (dmax={int_cfg['dmax']}, "
+              f"tables ~{(int_cfg['dmax'] + 1) * 8 / 1024:.0f}kB add+sub, "
+              f"JIT={'yes' if _G._jit_kernels() is not None else 'no (python fallback)'})")
 
     hf = hf_proc = None
     if args.compare_hf:
@@ -103,9 +141,31 @@ def main():
             d = geo.forward(pv).squeeze(0).float().cpu().numpy()
         return d
 
+    def process_int(rgb_float):
+        """Learned integer head: float backbone/neck/convs -> 32ch features,
+        then IntegerPhiHead tree LUT-adds (JIT). Returns (int_depth, float_depth)."""
+        import geo_int as _G
+        from geo_depth import preprocess
+        pv = preprocess(rgb_float, size=args.size)
+        if use_fp16:
+            pv = pv.half()
+        with torch.no_grad():
+            pv_d = pv.to(geo.device)
+            fmaps, ph, pw = geo.backbone.forward_stages(pv_d)
+            fused = geo.neck(fmaps)
+            float_depth = geo.head(fused, ph, pw).squeeze(0).float().cpu().numpy()
+            feat = geo.head.last_features.squeeze(0).float().permute(1, 2, 0)
+            H, W, _ = feat.shape
+            flat = feat.reshape(-1, 32).cpu().numpy()
+        fs, fe = _G.IntegerPhiHead.encode_features(flat)
+        int_flat = int_head.int_predict(fs, fe)
+        int_depth = int_flat.reshape(H, W).astype(np.float32)
+        return int_depth, float_depth
+
     if args.frames > 0:
         # headless capture test
         corrs = []
+        int_corrs = []
         for i in range(args.frames):
             ret, frame = cap.read()
             if not ret:
@@ -113,13 +173,21 @@ def main():
                 break
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
             t0 = time.perf_counter()
-            depth = process(rgb)
+            if int_head is not None:
+                depth, float_depth = process_int(rgb)
+                c_if = float(np.corrcoef(depth.flatten().astype(np.float64),
+                                         float_depth.flatten().astype(np.float64))[0, 1])
+                int_corrs.append(c_if)
+            else:
+                depth = process(rgb)
             ms = (time.perf_counter() - t0) * 1000
             colored = colorize(depth, COLORMAPS[0][0])
             colored = cv2.resize(colored, (frame.shape[1], frame.shape[0]))
             cv2.imwrite(str(outdir / f'geo_webcam_{i}_combined.png'),
                         np.hstack([frame, colored]))
             line = f"frame {i}: geo {ms:.0f}ms ({1000 / ms:.1f} FPS) depth{depth.shape}"
+            if int_head is not None:
+                line += f"  int-vs-float corr={int_corrs[-1]:.6f}"
             if hf is not None:
                 from PIL import Image
                 inputs = hf_proc(images=Image.fromarray((rgb * 255).astype(np.uint8)),
@@ -141,6 +209,8 @@ def main():
             print(line, flush=True)
         if corrs:
             print(f"mean HF parity corr: {np.mean(corrs):.6f}")
+        if int_corrs:
+            print(f"mean int-vs-float corr: {np.mean(int_corrs):.6f}")
         cap.release()
         print(f"saved to {outdir}/geo_webcam_*_combined.png")
         return
@@ -155,7 +225,10 @@ def main():
         if not ret:
             break
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
-        depth = process(rgb)
+        if int_head is not None:
+            depth, _float_depth = process_int(rgb)
+        else:
+            depth = process(rgb)
         colored = colorize(depth, COLORMAPS[cmap_idx][0])
         colored = cv2.resize(colored, (frame.shape[1], frame.shape[0]))
         dt = time.perf_counter() - t0
@@ -165,7 +238,7 @@ def main():
         fps = len(win) / sum(win)
         cv2.putText(colored, f"FPS: {fps:.1f} | {COLORMAPS[cmap_idx][1]}",
                     (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(colored, "geo-DAV2 (backbone+neck+head)",
+        cv2.putText(colored, "geo-DAV2 int-head (learned)" if int_head is not None else "geo-DAV2 (backbone+neck+head)",
                     (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.imshow('geo-DAV2', np.hstack([frame, colored]))
         key = cv2.waitKey(1) & 0xFF

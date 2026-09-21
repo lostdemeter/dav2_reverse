@@ -62,8 +62,8 @@ def main():
                     G.FRAC_CAP = cap
                     G._FRAC_LUT = build_frac_table(cap)
                     G.DMAX = dmax
-                    add = G.build_add_lut(dmax)
-                    sub = G.build_sub_lut(dmax)
+                    add = G.build_add_lut(dmax=dmax)
+                    sub = G.build_sub_lut(dmax=dmax)
                     G._EXP_LUT = build_exp_table(span)
                     # head fixed-dot
                     t0 = time.perf_counter()

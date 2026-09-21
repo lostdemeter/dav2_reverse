@@ -74,3 +74,33 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   incumbent per case, not a fixed bar), (c) Pareto-frontier reporting
   instead of single-incumbent when accuracy and bytes trade off.
   None of these change the core — all live in adapter/rule code.
+
+## 2026-09-21 — learned head runs live on webcam
+
+- `geo_webcam.py --int-head` loads `adapt/runs/graduation.json`, patches
+  DMAX + head LUTs, runs float backbone/neck/convs for 32ch features,
+  then IntegerPhiHead (JIT) per frame. Headless 3-frame test:
+  int-vs-float 0.999929, HF parity 0.999456, ~4 FPS (vs ~100 float).
+  Bottleneck is the per-pixel Python path around the JIT kernel
+  (numpy log-encode + decode list-comp over 196k px), not the kernel
+  itself (0.1 us/px). Vectorizing the boundary is the obvious speedup.
+- THE K-BUG, caught by this test: `build_add_lut(dmax)` passes dmax
+  positionally into the `k` slot (`(k=K, dmax=DMAX)`), silently building
+  tables on the wrong grid — first run gave corr -0.08 (garbage).
+  Dormancy analysis, verified: the misbuilt arrays were consumed ONLY
+  by the webcam path (which assigns them onto the head instance).
+  `graduate.py`/`lut_pareto.py` built the same misbuilt arrays but never
+  read them — tree/fixed evaluation uses the head instance's own
+  default-built LUTs, and dmax reaches evaluation through the `G.DMAX`
+  global (clipping threshold), which was always patched correctly.
+  Proof: graduation re-run after the fix is trial-for-trial identical
+  (same promotions, same overshoot, same audit). Pareto's FRAC/EXP
+  findings never touched add/sub at all. Fix applied at all 4 call
+  sites (keyword `dmax=`); no published numbers change.
+- LIBRARY: two lessons. (1) Dead parameters are silent: `_integer_depth`
+  accepts `add, sub` and ignores them — the real dmax path is a module
+  global. Plumb effectful parameters explicitly or drop them; an unused
+  argument is a latent wrong-result bug, as demonstrated. (2) A live
+  end-to-end test caught what the parity suites couldn't, because the
+  suites never exercised the assignment path. New-behavior demos should
+  run before results are written up, not after.

@@ -117,8 +117,8 @@ class WidthAdapter:
             G._FRAC_LUT = build_frac_table(cfg["frac_cap"])
             G.DMAX = cfg["dmax"]
             G._EXP_LUT = build_exp_table(cfg["exp_span"])
-            add = G.build_add_lut(cfg["dmax"])
-            sub = G.build_sub_lut(cfg["dmax"])
+            add = G.build_add_lut(dmax=cfg["dmax"])
+            sub = G.build_sub_lut(dmax=cfg["dmax"])
             results = {}
             for role in ("exploration", "gate", "retention"):
                 cases = []
@@ -273,8 +273,8 @@ def main():
             G._FRAC_LUT = build_frac_table(final['config']['frac_cap'])
             G.DMAX = final['config']['dmax']
             G._EXP_LUT = build_exp_table(final['config']['exp_span'])
-            add = G.build_add_lut(final['config']['dmax'])
-            sub = G.build_sub_lut(final['config']['dmax'])
+            add = G.build_add_lut(dmax=final['config']['dmax'])
+            sub = G.build_sub_lut(dmax=final['config']['dmax'])
             pred = _integer_depth(shared, final['config'], rgb, add, sub)
             res.append((cid, _corr(pred, ref)))
         finally:
