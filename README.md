@@ -66,28 +66,78 @@ If you want to re-derive them from scratch:
 python fit_weights.py --images /path/to/some/images/
 ```
 
-## Fully-geometric pipeline (new)
+## Fully-geometric DAV2 (new)
 
 `phi_depth.py` above keeps the HF backbone/neck and only swaps the last
-`32->1` layer. The `geo_*` modules are the fully-geometric port — every
-weight (backbone ViT-S 22M, neck 2.7M, head 27K) is phi-encoded
-(`sign * PHI**((exp-32768)/512)`, K=512) with a shared LUT, ported from:
+`32->1` layer. The `geo_*` modules go all the way: **backbone + neck +
+head**, every weight phi-encoded (`sign × φ^((exp−32768)/512)`, K=512)
+with a shared LUT. Inference imports only torch+numpy — no
+`transformers`, no HuggingFace download.
 
-- `phi_geometric/core/encoder.py` + `phi_cuda.py` (LUT) → `geo_lut.py`
-- `geometric_colorizer_v15_attention.py` (geometric attention) → `geo_backbone.py`
-- `da2_multiscale_phi.py` (phi-weighted fusion) → `geo_neck.py`
-- `experimental_decoder.py` (explicit PHI^0,-1,-2,-3 head) → `geo_head.AnalyticHead`
+![HF vs geometric parity — input | HF depth | geometric depth | |error|, corr=0.9999](docs/geometric_parity.png)
+
+*Same input through HF `Depth-Anything-V2-Small-hf` and our geometric
+pipeline. Correlation 0.9999; geometric runs the full model, not just the head.*
+
+### Backbone — DINOv2 ViT-S, geometric (`geo_backbone.py`)
+
+HF spec: 12 layers, hidden 384, 6 heads, patch 14, out stages 3/6/9/12
+(22M params). Forward order (pre-norm → QKV → 6-head softmax → proj →
+layer-scale residual → MLP/GELU → layer-scale residual, final layernorm)
+is ported from `geometric_colorizer_v15_attention.py`
+(`GeometricAttentionLayer`/`GeometricDINOv2`: *"Attention IS geometric —
+just matrix ops"*). Patch embed, QKV, proj, MLP, norms, layer-scales,
+CLS token and position embeddings are all baked as phi
+(sign, exponent) pairs and LUT-decoded once at load — the same
+`PhiEncoder` scheme as `phi_geometric/core/encoder.py`. Bicubic
+position-embedding interpolation handles non-518 inputs.
+
+### Neck — DPT reassemble + fusion, geometric (`geo_neck.py`)
+
+HF spec (`DepthAnythingNeck`, 2.7M params): 4× reassemble (1×1 proj
+384→48/96/192/384, then ×4 deconv / ×2 deconv / identity / stride-2
+conv), 4× 3×3 convs to 64ch, then 4 fusion stages in reverse order
+(small→large) each with 1×1 proj + 2× pre-act residual blocks and
+bilinear ×2 upsample. All conv weights are phi-baked; interpolation
+stays analytic (no weights to encode). Fusion also accepts
+`fusion_exponents` for φ-weighted multiscale fusion
+(`φ^e_i / Σφ^e_j`, from `da2_multiscale_phi.py`); default is uniform,
+i.e. exact replication.
+
+### Head — depth decoder, geometric (`geo_head.py`)
+
+HF spec (`DepthAnythingDepthEstimationHead`, 27K params): conv 64→32
+3×3, bilinear upsample to full res, conv 32→32 3×3, ReLU (this is the
+old `head.activation1` tap the 125-byte fast path hooks), conv 32→1
+1×1, ReLU×max_depth. All three convs are phi-baked. Two extra modes:
+`fast_predict_125b()` reuses `weights/phi_weights_compact.bin` for
+webcam speed, and `AnalyticHead` (ported from
+`experimental_decoder.py`: edge/texture/color/perspective cues with
+`φ^0,−1,−2,−3` weights) shows the zero-learned-weight limit.
+
+### Install — build weights from HF, don't ship them
+
+The baked weights (`weights/geometric_*.npz`, ~47MB) are **not** in git
+(gitignored, like `captures/`). Each user builds them once from the
+original HF model:
 
 ```bash
-python export_geometric_weights.py   # one-time bake, needs HF (~94MB download)
-python test_geometric_parity.py      # expect corr > 0.999 on gradient+checker
+git clone <this-repo> && cd dav2_reverse
+pip install -r requirements.txt
+python export_geometric_weights.py   # HF download ~94MB, bakes phi npz locally
+python demo_geometric.py             # HF -> geometric figure, expect corr > 0.999
+python test_geometric_parity.py      # gradient+checker parity suite
+python geo_webcam.py                 # live fully-geometric webcam (M/S/X)
 ```
 
-`test_geometric_parity.py` (2026-09-21, CUDA): gradient corr=0.999995,
-checker corr=0.999998 vs `Depth-Anything-V2-Small-hf`. Inference
-(`geo_depth.GeometricDepthAnythingV2`) imports only torch+numpy — no
-`transformers`/HF download. Baked `weights/geometric_*.npz` are local-only
-(gitignored, reproducible); no push to GitHub until verified.
+Measured 2026-09-21 (CUDA, fp32 unless noted):
+| Check | Result |
+|-------|--------|
+| synthetic gradient vs HF | corr=0.999995 |
+| synthetic checker vs HF | corr=0.999998 |
+| demo scene vs HF | corr=0.999914 |
+| real webcam frame, shared input, fp32 | corr=0.999990 |
+| live webcam fp16 | ~95–100 FPS after warmup, corr≈0.986–0.998 (fp16+resize diff) |
 
 ## Repository Structure
 
@@ -96,16 +146,29 @@ phi-depth/
 ├── README.md              # This file
 ├── LICENSE                # GPLv3
 ├── requirements.txt       # Minimal deps
-├── phi_depth.py           # Main entry point (webcam → side-by-side display)
+├── phi_depth.py           # Head-only demo (HF backbone/neck + 125-byte head)
 ├── phi_decoder.py         # φ-arithmetic decoder core
 ├── phi_compact.py         # Compact 125-byte storage format
+├── geo_lut.py             # Shared φ-LUT (sign×φ^(exp/K) encode/decode)
+├── geo_backbone.py        # Geometric DINOv2 ViT-S + export_from_hf()
+├── geo_neck.py            # Geometric DPT reassemble+fusion + export_from_hf()
+├── geo_head.py            # Geometric head + AnalyticHead + export_from_hf()
+├── geo_depth.py           # End-to-end geometric DAV2 (no transformers)
+├── geo_webcam.py          # Live fully-geometric webcam test
+├── export_geometric_weights.py  # One-time HF->phi bake (builds gitignored npz)
+├── test_geometric_parity.py     # Parity suite (corr > 0.999)
+├── demo_geometric.py            # HF->geometric demo figure (no webcam)
 ├── weights/
-│   ├── phi_weights.bin        # Standard weights (203 bytes)
-│   └── phi_weights_compact.bin # Compact weights (125 bytes)
+│   ├── phi_weights.bin        # Standard weights (203 bytes, committed)
+│   ├── phi_weights_compact.bin # Compact weights (125 bytes, committed)
+│   └── geometric_*.npz        # Baked phi weights (~47MB, GITIGNORED, build locally)
 ├── docs/
-│   └── demo.png           # Demo screenshot
-└── fit_weights.py         # Optional: re-fit weights from DA2
+│   ├── demo.png               # Head-only demo screenshot
+│   └── geometric_parity.png   # HF vs geometric parity figure
+└── fit_weights.py         # Optional: re-fit 125-byte weights from DA2
 ```
+
+`captures/` (webcam snapshots) is gitignored and never uploaded.
 
 ## License
 
