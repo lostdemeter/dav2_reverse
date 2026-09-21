@@ -31,6 +31,14 @@ DMAXS = (4096, 1024)
 ACCUMS = ("tree", "fixed")
 SEED = {"frac_cap": 13312, "exp_span": 16, "dmax": 4096, "accum": "tree"}
 CORR_PASS = 0.999
+# Integer-harness bar, CALIBRATED (2026-09-21 correction): the full-res
+# integer head measures ~0.9990 vs HF refs and the stride-4 harness
+# ~0.995-0.998 even for the exact seed — the 0.999 float-pipeline bar
+# exceeds what this harness can deliver to ANY config (verified: seed
+# scored 2/14 at 0.999). 0.99 separates working (>=0.994 measured) from
+# broken (<=0.90); finer distinctions live in mean_corr + the margin
+# rule. The float architecture harness keeps 0.999. See NOTES.
+CORR_PASS_INT = 0.99
 STRIDE = 4  # integer-head eval grid stride on 518px features (130^2 pts)
 
 
@@ -135,7 +143,7 @@ class WidthAdapter:
                 for rgb, ref, cid in self.fixtures[role]:
                     pred = _integer_depth(self.shared, cfg, rgb, add, sub)
                     c = _corr(pred, ref)
-                    cases.append(CaseResult(cid, True, c >= CORR_PASS, f"corr={c:.5f}"))
+                    cases.append(CaseResult(cid, True, c >= CORR_PASS_INT, f"corr={c:.5f}"))
                 results[role] = Scorecard(f"dav2int-{role}-s4", tuple(cases))
             # deterministic softmax probe (makes exp_span observable)
             logits, ref_p = self.probe

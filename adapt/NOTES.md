@@ -3,6 +3,39 @@
 Working log for the experimental branch. Kept because several findings
 generalize to adaptation_foundry as a library (flagged LIBRARY below).
 
+## 2026-09-21 — CORRECTION: the integer-harness bar was unreachable
+
+- The GA calibration failed twice (best 2/14), which smelled wrong and
+  was: the SEED ITSELF scores 2/14 in the integer stride-4 harness
+  (0.995–0.998; full-res integer head tops ~0.9990 vs HF). The 0.999
+  float-pipeline bar exceeds what this harness delivers to ANY config.
+  Float pipeline intact (0.999995) — harness problem, not model problem.
+- Consequence, stated plainly: the round-one/round-two graduation
+  "promotions" were ties-among-failures + real byte savings. The byte
+  finding (EXP halving, probe at 1.0) stands; the "parity held" language
+  in earlier entries was wrong. This entry corrects them; history kept.
+- Fix: `CORR_PASS_INT = 0.99`, calibrated from measured seed capability
+  (separates working >=0.994 from broken <=0.90); finer distinctions
+  stay in mean_corr + margin rule. Float harness keeps 0.999.
+- Re-run under the corrected bar: trial 3 (exp8) PROMOTES on a genuine
+  14/14 tie; trial 4 (dmax1024) is correctly rejected WITH retention
+  loss (so the dmax finding survives honestly); frac moves correctly
+  unpromotable. Same incumbent {13312,8,4096}, now earned.
+- LIBRARY: bars must be calibrated to what the harness can deliver to
+  the SEED, measured before any search runs. A bar above seed
+  capability turns every verdict into noise with correct-looking
+  reasons — the most dangerous failure mode in this file, because the
+  machinery looked like it was working. Add "measure seed first" to
+  any experiment checklist.
+- GA CALIBRATION: PASS under the corrected bar — 7 parity-holders,
+  5 meet the bar (exp8 + fewer bytes), including {4096,8,4096}.
+  Plus a controller lesson from round one: pure-Pareto selection let
+  tiny-broken configs own the front on bytes alone; feasibility-first
+  ordering (correctness, then bytes) + always-mutate fixed it.
+  Diversity stayed healthy throughout (mean zeta distance 500-900,
+  never collapsed to 0) — the fingerprint instrumentation earned its
+  keep as an observer even before niching uses it.
+
 ## 2026-09-21 — scaffold + first search
 
 - The vendored core worked untouched: seed/baseline, neighbor proposals,
