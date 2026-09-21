@@ -168,7 +168,14 @@ pure-Python int loop (~8 s/frame at 518² — a Numba/C port per the
 extends this to neck convolutions (1×1, 3×3, bias, ReLU, all
 integer-chained with tree reduction to bound LUT-rounding error):
 reassemble-proj corr=0.999920, chained 3×3 corr=0.999877, chained
-fusion-conv+ReLU corr=0.999663 (`python geo_int.py`). Honest boundaries:
+fusion-conv+ReLU corr=0.999663 (`python geo_int.py`). The fixed-point
+bridge (`to_fixed`/`from_fixed`, 15-bit mantissa, offline FRAC/COARSE/
+FINE LUTs) adds the resampling + attention core with zero FPU at
+runtime: bridge roundtrip 1.000000, bilinear ×2 interp 0.999704,
+non-overlapping deconv (re1 k2/s2, real weights) 0.999970, 290-way
+stable softmax 1.000000. Remaining integer gaps: overlapping
+deconv/stride-conv via the same fixed canvas, LayerNorm/GELU as bounded
+integer LUTs, full integer transformer layer. Honest boundaries:
 feature *encoding* (float→int) and final decode-for-display still use
 floats — on FPU-free hardware the sensor front-end would emit
 fixed-point ints with an integer encode LUT (future work), as would the
