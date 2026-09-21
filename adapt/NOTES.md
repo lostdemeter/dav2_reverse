@@ -127,6 +127,24 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   (+119,560 B, no gain). Audit 0.9948–0.9979 (same integer path as
   before, deterministic). No overshoot: the objective now sees what the
   evaluator sees.
+## 2026-09-21 — C firmware on live webcam + leanness payoff verdict
+
+- `phi_head_predict_batch` (one ctypes call/frame) + `geo_webcam.py
+  --c-head`: live C integer head, bit-IDENTICAL to the Python int path
+  on camera frames (corr 1.000000, maxabs 0.0 — not close, exact).
+- Measured per-frame budget (196k px, CUDA): float stage 7ms steady;
+  encode boundary (numpy log) 92ms; C batch 38ms; vectorized decode
+  ~10ms. Python int-head path was ~210-455ms total. So the C kernel is
+  ~12x faster than the Python/JIT head — and the remaining cost is the
+  FLOAT encode boundary, not integer math. True embedded has no float
+  encode either (fixed-point sensor path, still future work).
+- LEANNESS VERDICT, honest: on host FPS, learned narrowness pays
+  ~nothing for the tree head (ADD/SUB sizes unchanged at dmax 4096;
+  EXP halving is untouched by this path). The payoff is footprint —
+  544 kB vs 1.1 MB tables on flash — not speed. The speed levers were
+  dropped blocks (none held parity) and the C kernel itself (12x, won
+  above). Footprint is the right claim; FPS is not. Saying so plainly.
+
 ## 2026-09-21 — finer granularity: heads nearly hold, unification ships
 
 - Head-ablation sweep (all 72: single-head zeroing, exploration corrs):

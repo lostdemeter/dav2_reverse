@@ -66,6 +66,15 @@ void phi_head_predict(const int8_t *fs, const int32_t *fe, const uint8_t *fz,
                       int8_t tms, int32_t tme,
                       int8_t *so, int32_t *eo, uint8_t *zo);
 
+/* Batch head over N pixels (one ctypes call per frame): fs/fe/fz are
+ * [N*32] row-major, outputs [N]. Pure C loop over phi_head_predict —
+ * the firmware-shaped entry point (frame buffer in, triples out). */
+void phi_head_predict_batch(const int8_t *fs, const int32_t *fe, const uint8_t *fz,
+                            const int8_t *ws, const int32_t *we,
+                            const int8_t *ms, const int32_t *me,
+                            int8_t tms, int32_t tme,
+                            int8_t *so, int32_t *eo, uint8_t *zo, int n);
+
 /* Stable softmax over n absolute-fixed (2^-14 unit) scores -> (num, den).
  * Downstream: attn@V = sum(num[i]*vq[i]) / den, all integer. */
 void phi_softmax(const int64_t *scores, int n, int64_t *num, int64_t *den);

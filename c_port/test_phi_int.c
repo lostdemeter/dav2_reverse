@@ -58,6 +58,28 @@ int main(void) {
         printf("head bit-exact mismatches: %d/%d\n", mism, TV_N);
     }
 
+    /* 3b. batch head == per-pixel head AND matches Python vectors */
+    {
+        static int8_t bfs[64 * 32];
+        static int32_t bfe[64 * 32];
+        static uint8_t bfz[64 * 32];
+        static int8_t bso[64];
+        static int32_t beo[64];
+        static uint8_t bzo[64];
+        int mism = 0;
+        for (i = 0; i < TV_N * 32; i++) {
+            bfs[i] = TV_FS[i];
+            bfe[i] = TV_FE[i];
+            bfz[i] = 0;
+        }
+        phi_head_predict_batch(bfs, bfe, bfz, TV_WS, TV_WE, TV_MS, TV_ME,
+                               TV_TMS, TV_TME, bso, beo, bzo, TV_N);
+        for (i = 0; i < TV_N; i++)
+            if (bso[i] != TV_EXP_S[i] || beo[i] != TV_EXP_E[i]) mism++;
+        CHECK(mism == 0, "batch head mismatches=%d/%d", mism, TV_N);
+        printf("batch head mismatches: %d/%d\n", mism, TV_N);
+    }
+
     /* 4. softmax rows sum to ~1.0 (in double, harness only) */
     {
         int64_t scores[5] = { 32768, 16384, 0, -16384, -32768 };

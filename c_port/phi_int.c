@@ -103,6 +103,18 @@ void phi_head_predict(const int8_t *fs, const int32_t *fe, const uint8_t *fz,
     phi_add(acc_s, acc_e, acc_z, tms, tme, 0, so, eo, zo);
 }
 
+void phi_head_predict_batch(const int8_t *fs, const int32_t *fe, const uint8_t *fz,
+                            const int8_t *ws, const int32_t *we,
+                            const int8_t *ms, const int32_t *me,
+                            int8_t tms, int32_t tme,
+                            int8_t *so, int32_t *eo, uint8_t *zo, int n) {
+    int i;
+    for (i = 0; i < n; i++)
+        phi_head_predict(fs + i * 32, fe + i * 32, fz + i * 32,
+                         ws, we, ms, me, tms, tme,
+                         so + i, eo + i, zo + i);
+}
+
 void phi_softmax(const int64_t *scores, int n, int64_t *num, int64_t *den) {
     int64_t vmax, dsum = 0;
     int i;

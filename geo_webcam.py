@@ -63,9 +63,13 @@ def main():
                     help='input long side (default 518, use 364/336 on CPU for speed)')
     ap.add_argument('--int-head', action='store_true',
                     help='use learned integer head (graduated widths) instead of float conv3')
+    ap.add_argument('--c-head', action='store_true',
+                    help='run the integer head in compiled C (implies --int-head); firmware-shaped path')
     ap.add_argument('--widths-json', type=str, default='adapt/runs/graduation.json',
                     help='graduation incumbent JSON (default: adapt/runs/graduation.json)')
     args = ap.parse_args()
+    if args.c_head:
+        args.int_head = True
 
     if args.size is None:
         args.size = 364 if args.cpu else 518
@@ -84,6 +88,7 @@ def main():
 
     int_head = None
     int_cfg = None
+    cheat = None  # ctypes C-head binding when --c-head
     if args.int_head:
         import json as _json
         import geo_int as _G
@@ -108,6 +113,33 @@ def main():
         print(f"integer head ready (dmax={int_cfg['dmax']}, "
               f"tables ~{(int_cfg['dmax'] + 1) * 8 / 1024:.0f}kB add+sub, "
               f"JIT={'yes' if _G._jit_kernels() is not None else 'no (python fallback)'})")
+        if args.c_head:
+            import ctypes
+            import subprocess
+            import numpy as _np
+            cdir = Path(__file__).parent / 'c_port'
+            lib = cdir / 'generated' / 'libphi_head.so'
+            if not lib.exists():
+                print("compiling C head library (one-time)...")
+                subprocess.run(['gcc', '-O2', '-std=c99', '-shared', '-fPIC',
+                                str(cdir / 'phi_int.c'), str(cdir / 'generated' / 'luts.c'),
+                                '-o', str(lib)], check=True)
+            so = ctypes.CDLL(str(lib))
+            fn = so.phi_head_predict_batch
+            I8 = _np.ctypeslib.ndpointer(dtype=_np.int8, flags='C_CONTIGUOUS')
+            I32 = _np.ctypeslib.ndpointer(dtype=_np.int32, flags='C_CONTIGUOUS')
+            U8 = _np.ctypeslib.ndpointer(dtype=_np.uint8, flags='C_CONTIGUOUS')
+            fn.argtypes = [I8, I32, U8, I8, I32, I8, I32,
+                           ctypes.c_int8, ctypes.c_int32, I8, I32, U8, ctypes.c_int]
+            fn.restype = None
+            import geo_lut as _gl
+            cheat = {"fn": fn, "ws": np.ascontiguousarray(int_head.w_s, dtype=np.int8),
+                     "we": np.ascontiguousarray(int_head.w_e, dtype=np.int32),
+                     "ms": np.ascontiguousarray(int_head.m_s, dtype=np.int8),
+                     "me": np.ascontiguousarray(int_head.m_e, dtype=np.int32),
+                     "tms": int(int_head.tm_s), "tme": int(int_head.tm_e),
+                     "lut": _gl.get_lut().to(torch.float32).cpu().numpy()}
+            print(f"C head ready: {lib} (batch, one call/frame)")
 
     hf = hf_proc = None
     if args.compare_hf:
@@ -160,10 +192,32 @@ def main():
             H, W, _ = feat.shape
             flat = feat.reshape(-1, 32).cpu().numpy()
         t_float = (time.perf_counter() - t0) * 1000
+        t1 = time.perf_counter()
         fs, fe = _G.IntegerPhiHead.encode_features(flat)
-        int_flat = int_head.int_predict(fs, fe)
+        fs = np.ascontiguousarray(fs, dtype=np.int8)
+        fe = np.ascontiguousarray(fe, dtype=np.int32)
+        t_enc = (time.perf_counter() - t1) * 1000
+        if cheat is not None:
+            n = fs.shape[0]
+            fz = np.zeros((n, 32), dtype=np.uint8)
+            so = np.empty(n, dtype=np.int8)
+            eo = np.empty(n, dtype=np.int32)
+            zo = np.empty(n, dtype=np.uint8)
+            t1 = time.perf_counter()
+            cheat["fn"](fs, fe, fz, cheat["ws"], cheat["we"], cheat["ms"],
+                        cheat["me"], cheat["tms"], cheat["tme"],
+                        so, eo, zo, n)
+            t_head = (time.perf_counter() - t1) * 1000
+            lut = cheat["lut"]
+            int_flat = (so.astype(np.float32)
+                        * lut[np.clip(eo, 0, 65535)]).astype(np.float32)
+            int_flat = np.where(zo == 1, 0.0, int_flat)
+        else:
+            t1 = time.perf_counter()
+            int_flat = int_head.int_predict(fs, fe)
+            t_head = (time.perf_counter() - t1) * 1000
         int_depth = int_flat.reshape(H, W).astype(np.float32)
-        t_int = (time.perf_counter() - t0) * 1000 - t_float
+        t_int = t_enc + t_head  # (decode is numpy-vectorized, ~ms; folded into head)
         return int_depth, float_depth, t_float, t_int
 
     if args.frames > 0:
