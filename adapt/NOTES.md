@@ -207,6 +207,36 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   changes. Byte deltas near zero should be treated as zero before any
   efficiency reasoning touches them — a tolerance the EfficiencyRule
   doesn't have yet. Logged as the next rule refinement.
+- RESOLVED (drop search): `_model_bytes` now excludes pickle framing
+  entirely (params + fit bytes only), so the tolerance issue is moot
+  for this driver — drops move megabytes, noise was bytes.
+
+## 2026-09-21 — block-drop search: the early win did NOT land
+
+- Design: DSL `dropped` (unique block ids 0..23), backbone skips blocks
+  (residual passthrough), drop-add moves at priority 9 so all 24 singles
+  run first (trials 2–25, verified), `_model_bytes` = remaining backbone
+  float32 + neck + head + fit bytes (constants measured, not assumed:
+  backbone 22056192, attn block 592128, mlp 1182336 — smoke asserts the
+  exact deltas), driver under EfficiencyRule with 200MiB cap (model is
+  ~100MB; the default 64MiB cap would reject everything).
+- Outcome, plainly: NO deletable blocks at parity. All 24 singles
+  rejected with full exploration collapse; best pairs (L11mlp+L9attn
+  0.847, L11mlp+L10mlp 0.873, triple 0.682) worse than singles.
+- The consolation is structural, and it surprised us: dispensability is
+  NOT monotonic with depth. Ranked single-drop means: L11-mlp 0.953 >
+  L9-attn 0.933 > L10-mlp 0.859 > … > L5-mlp 0.264. The single-scene
+  0.97 that motivated this search was L11-mlp on scene 0 (min 0.896
+  across scenes — correctly held by the gates). Late blocks lead, but
+  mid-network blocks (L5-mlp, L3-attn) are the most load-bearing, not
+  early ones. The naive "early fragile, late dispensable" story from
+  the gain search needs this correction: gains and drops probe
+  different things (scaling vs removal).
+- What this means for the leanest-model thesis: the backbone is
+  load-bearing at whole-block granularity. Remaining leanness plays:
+  finer granularity (half-width MLP? single-head ablation?),
+  the already-won width tables, and the emitter. NOT on the table:
+  relaxing the bar to manufacture a win.
 
 ## 2026-09-21 — backbone weights learned (24 block gains), exhaustion
 

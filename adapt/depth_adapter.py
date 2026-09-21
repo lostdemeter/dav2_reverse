@@ -40,7 +40,17 @@ N_BGAINS = 24
 
 SEED_CONFIG = {"readout": 3, "res_scales": [0, 0, 0, 0], "head": "geo-conv",
                "taps": [3, 6, 9, 12], "tap_gains": [0, 0, 0, 0],
-               "block_gains": [0] * N_BGAINS}
+               "block_gains": [0] * N_BGAINS, "dropped": []}
+
+# Float32 parameter bytes removed per dropped block (exact shapes):
+#   attn: norm1(768) + q/k/v(3x(384x384+384)) + proj(384x384+384) = 592,128
+#   mlp:  norm2(768) + fc1(1536x384+1536) + fc2(384x1536+384) = 1,182,336
+ATTN_BLOCK_PARAMS = 768 + 3 * (384 * 384 + 384) + (384 * 384 + 384)
+MLP_BLOCK_PARAMS = 768 + (1536 * 384 + 1536) + (384 * 1536 + 384)
+assert ATTN_BLOCK_PARAMS == 592128 and MLP_BLOCK_PARAMS == 1182336
+BACKBONE_PARAMS = 22056192  # measured sum over baked backbone buffers
+NECK_PARAMS = 2700768       # measured (reassemble + fusion)
+HEAD_PARAMS = 27745         # conv1 + conv2 + conv3 (+biases)
 
 
 def validate_config(cfg):
@@ -48,7 +58,8 @@ def validate_config(cfg):
     if not isinstance(cfg, dict):
         raise ValueError("config must be an object")
     keys = set(cfg)
-    want_keys = {"readout", "res_scales", "head", "taps", "tap_gains", "block_gains"}
+    want_keys = {"readout", "res_scales", "head", "taps", "tap_gains",
+                 "block_gains", "dropped"}
     if keys != want_keys:
         raise ValueError(f"config keys must be exactly {sorted(want_keys)}, got {sorted(keys)}")
     readout = cfg["readout"]
@@ -77,8 +88,15 @@ def validate_config(cfg):
     if (not isinstance(bg, list) or len(bg) != N_BGAINS
             or any(type(v) is not int or not BGAIN_LO <= v <= BGAIN_HI for v in bg)):
         raise ValueError(f"block_gains must be {N_BGAINS} ints in [{BGAIN_LO},{BGAIN_HI}]")
+    dropped = cfg["dropped"]
+    if (not isinstance(dropped, list)
+            or any(type(v) is not int or not 0 <= v < N_BGAINS for v in dropped)
+            or len(set(dropped)) != len(dropped)):
+        raise ValueError(f"dropped must be a unique list of block ids in [0,{N_BGAINS})")
+    dropped = sorted(dropped)
     return {"readout": readout, "res_scales": list(scales), "head": cfg["head"],
-            "taps": list(taps), "tap_gains": list(gains), "block_gains": list(bg)}
+            "taps": list(taps), "tap_gains": list(gains), "block_gains": list(bg),
+            "dropped": dropped}
 
 
 def neighbor_configs(cfg):
@@ -122,6 +140,16 @@ def neighbor_configs(cfg):
                 c = dict(cfg, block_gains=bg)
                 kind = "attn" if i % 2 == 0 else "mlp"
                 out.append((c, f"backbone L{i // 2} {kind} out xphi^{nv}", 28))
+    have = set(cfg["dropped"])
+    for b in range(N_BGAINS):
+        if b not in have:
+            c = dict(cfg, dropped=sorted(have | {b}))
+            kind = "attn" if b % 2 == 0 else "mlp"
+            out.append((c, f"DROP backbone L{b // 2} {kind} (residual-only)", 9))
+    for b in sorted(have):
+        c = dict(cfg, dropped=sorted(have - {b}))
+        kind = "attn" if b % 2 == 0 else "mlp"
+        out.append((c, f"restore backbone L{b // 2} {kind}", 11))
     for i, v in enumerate(cfg["res_scales"]):
         for d in (-1, 1):
             nv = v + d
@@ -158,17 +186,32 @@ class ScaledNeckMixin:
         return hidden
 
 
-def _backbone_tapped(backbone, preprocess, device, rgb, taps, gains, bgains=None):
+def _backbone_tapped(backbone, preprocess, device, rgb, taps, gains, bgains=None,
+                     dropped=None):
     """Backbone stages at tap layers with phi-power gains. Returns fmaps, ph, pw."""
     import torch
     from geo_lut import PHI
     pv = preprocess(rgb).to(device)
     with torch.no_grad():
-        fmaps, ph, pw = backbone.forward_stages(pv, taps=taps, bgains=bgains)
+        fmaps, ph, pw = backbone.forward_stages(pv, taps=taps, bgains=bgains,
+                                                dropped=dropped)
     out = []
     for fm, g in zip(fmaps, gains):
         out.append(fm * float(PHI ** g) if g else fm)
     return out, ph, pw
+
+
+def _model_bytes(cfg, direct):
+    """Honest artifact size: remaining backbone float32 params + neck + head
+    + fitted head bytes (if any). Pickle framing is EXCLUDED deliberately:
+    small-int list values change pickle length by bytes (noise next to MB
+    block sizes — the same noise NOTES flagged in run_search deltas).
+    A dropped block genuinely shrinks this; ties+smaller can promote."""
+    remaining = BACKBONE_PARAMS
+    for b in cfg["dropped"]:
+        remaining -= ATTN_BLOCK_PARAMS if b % 2 == 0 else MLP_BLOCK_PARAMS
+    fit_bytes = 0 if direct is None else len(direct["w"].tobytes()) + 8
+    return remaining * 4 + (NECK_PARAMS + HEAD_PARAMS) * 4 + fit_bytes
 
 
 def run_pipeline(shared, config, rgb_list, fit_explore=None):
@@ -201,7 +244,7 @@ def run_pipeline(shared, config, rgb_list, fit_explore=None):
         fmaps, ph, pw = _backbone_tapped(
             backbone, preprocess, device, rgb,
             config['taps'], config['tap_gains'],
-            config['block_gains'])
+            config['block_gains'], config['dropped'])
         with torch.no_grad():
             fused = neck(fmaps)
             h = fused[config['readout']]
@@ -264,7 +307,7 @@ def fit_direct_head(shared, config, explore):
         fmaps, ph, pw = _backbone_tapped(
             backbone, preprocess, device, rgb,
             config['taps'], config['tap_gains'],
-            config['block_gains'])
+            config['block_gains'], config['dropped'])
         with torch.no_grad():
             fused = neck(fmaps)
             h = fused[config['readout']]
@@ -306,11 +349,18 @@ def corr(a, b):
 
 
 class DepthAdapter:
-    """ExperimentAdapter over the depth DSL. Gate/audit data never enters build."""
+    """ExperimentAdapter over the depth DSL. Gate/audit data never enters build.
 
-    def __init__(self, shared, fixtures):
+    size_mode: 'pickle' (legacy: config pickle bytes; keeps run_search
+    behavior identical) or 'params' (honest model bytes incl. dropped
+    blocks; for efficiency-gated drop search).
+    """
+
+    def __init__(self, shared, fixtures, size_mode='pickle'):
         self.shared = shared
         self.fixtures = fixtures  # role -> list[(rgb, ref, case_id)], NO audit key
+        assert size_mode in ('pickle', 'params')
+        self.size_mode = size_mode
 
     def seed(self):
         return TrialSpec("exact-replication", dict(SEED_CONFIG),
@@ -324,7 +374,8 @@ class DepthAdapter:
                          if v in (0, 1) else 'p' for v in cfg['block_gains'])
             name = (f"r{cfg['readout']}-t{''.join(map(str, cfg['taps']))}"
                     f"-g{''.join(map(str, cfg['tap_gains']))}"
-                    f"-b{bg}-s{''.join(map(str, cfg['res_scales']))}-{cfg['head']}")
+                    f"-b{bg}-x{''.join(map(str, sorted(cfg['dropped'])))}"
+                    f"-s{''.join(map(str, cfg['res_scales']))}-{cfg['head']}")
             spec = TrialSpec(name, cfg, rationale)
             if spec.identifier not in tried:
                 return spec
@@ -355,11 +406,12 @@ class DepthAdapter:
                              "direct": None if fit is None else
                              {"w": fit["w"].tobytes(), "b": fit["b"],
                               "Ht": fit["Ht"], "Wt": fit["Wt"]}}, protocol=5)
+        nbytes = _model_bytes(cfg, fit) if self.size_mode == 'params' else len(blob)
         diags = {role: {"mean_corr": sum(float(r.signature.split('=')[1])
                                           for r in cases[role].cases) / len(cases[role].cases)}
                  for role in cases}
         return Measurement(cases["exploration"], cases["gate"], cases["retention"],
-                           len(blob), diags)
+                           nbytes, diags)
 
     def fingerprint(self, artifact):
         cfg = validate_config(artifact["config"])

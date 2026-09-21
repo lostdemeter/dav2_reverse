@@ -34,6 +34,10 @@ for bad in ({}, dict(_good, readout=9),
             dict(_good, block_gains=[0] * 23),
             dict(_good, block_gains=[0] * 24 + [0]),
             dict(_good, block_gains=[0] * 23 + [3]),
+            dict(_good, dropped=[0, 0]),
+            dict(_good, dropped=[24]),
+            dict(_good, dropped=[-1]),
+            dict(_good, dropped="3"),
             dict(_good, extra=1)):
     try:
         validate_config(dict(bad))
@@ -42,7 +46,7 @@ for bad in ({}, dict(_good, readout=9),
         check(True, f"rejects {list(bad)[-1] if bad else '{}'}")
 
 moves = neighbor_configs(seed)
-check(len(moves) == 2 + 3 + 8 + 7 + 8 + 48, f"seed has 76 neighbors (got {len(moves)})")
+check(len(moves) == 2 + 3 + 8 + 7 + 8 + 48 + 24, f"seed has 100 neighbors (got {len(moves)})")
 specs = [TrialSpec(f"m{i}", dict(c), r) for i, (c, r, _p) in enumerate(moves)]
 check(len({s.identifier for s in specs}) == len(specs), "neighbor identifiers unique")
 check(all(validate_config(dict(s.config)) == dict(s.config) for s in specs),
@@ -136,11 +140,21 @@ ids = [TrialSpec(f"w{i}", dict(c), r).identifier for i, (c, r) in enumerate(wm)]
 check(len(set(ids)) == len(ids), "width neighbors unique")
 tgt = {"frac_cap": 8192, "exp_span": 8, "dmax": 4096, "accum": "tree"}
 check(table_bytes(tgt) == 557068, f"exp-halved tree tables (got {table_bytes(tgt)})")
-# honesty: frac moves under tree change nothing (evaluator can't see them)
 same = dict(tgt, frac_cap=2048)
 check(table_bytes(same) == table_bytes(tgt),
       "frac width unread by tree costs zero bytes either way")
 fixed = dict(WSEED, accum="fixed")
 check(table_bytes(fixed) == 1200916, f"seed fixed tables (got {table_bytes(fixed)})")
+
+from depth_adapter import _model_bytes, ATTN_BLOCK_PARAMS, MLP_BLOCK_PARAMS
+b0 = _model_bytes(dict(SEED_CONFIG), None)
+b_attn = _model_bytes(dict(SEED_CONFIG, dropped=[0]), None)
+b_mlp = _model_bytes(dict(SEED_CONFIG, dropped=[1]), None)
+check(b0 - b_attn == ATTN_BLOCK_PARAMS * 4 == 592128 * 4,
+      f"drop attn block saves exactly {ATTN_BLOCK_PARAMS * 4}B")
+check(b0 - b_mlp == MLP_BLOCK_PARAMS * 4 == 1182336 * 4,
+      f"drop mlp block saves exactly {MLP_BLOCK_PARAMS * 4}B")
+check(_model_bytes(dict(SEED_CONFIG, dropped=[0, 1]), None)
+      == b0 - (592128 + 1182336) * 4, "drops compose additively")
 print("SMOKE:", "PASS" if fails == 0 else "FAIL")
 raise SystemExit(1 if fails else 0)

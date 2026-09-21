@@ -74,7 +74,8 @@ class GeometricDinov2Backbone(torch.nn.Module):
     def _g(self, name: str) -> torch.Tensor:
         return self._w[name]
 
-    def forward_stages(self, pixel_values: torch.Tensor, taps=None, bgains=None):
+    def forward_stages(self, pixel_values: torch.Tensor, taps=None, bgains=None,
+                         dropped=None):
         """
         Args: pixel_values [B,3,H,W] float32.
               taps: 1-indexed layer numbers to tap (default OUT_STAGES).
@@ -82,6 +83,8 @@ class GeometricDinov2Backbone(torch.nn.Module):
                 block outputs before the layer-scale residual add. None = exact.
                 Uniform weight scaling would be absorbed by LayerNorm; these
                 output gains survive it by changing residual mixing ratios.
+              dropped: set/list of block indices 0..23 (even=attn, odd=mlp of
+                layer i//2) to skip entirely (residual-only passthrough).
         Returns: list of feature maps [B,384,H/14,W/14] in tap order,
                  plus patch_h, patch_w.
         """
@@ -90,6 +93,8 @@ class GeometricDinov2Backbone(torch.nn.Module):
         assert all(1 <= t <= LAYERS for t in want), f"taps out of range: {want}"
         if bgains is not None:
             assert len(bgains) == 2 * LAYERS, f"bgains needs {2 * LAYERS} ints"
+        drop = set(dropped) if dropped else set()
+        assert all(0 <= b < 2 * LAYERS for b in drop), f"dropped out of range: {drop}"
         B, _, H, W = pixel_values.shape
         x = pixel_values.to(self.device)
         ph, pw = H // PATCH, W // PATCH
@@ -124,32 +129,38 @@ class GeometricDinov2Backbone(torch.nn.Module):
         for li in range(LAYERS):
             p = f'layer{li}.'
             D = HIDDEN
-            # attention block
-            h = F.layer_norm(x, (D,), self._g(p + 'norm1.weight'), self._g(p + 'norm1.bias'))
-            q = F.linear(h, self._g(p + 'q.weight'), self._g(p + 'q.bias'))
-            k_ = F.linear(h, self._g(p + 'k.weight'), self._g(p + 'k.bias'))
-            v = F.linear(h, self._g(p + 'v.weight'), self._g(p + 'v.bias'))
-            q = q.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
-            k_ = k_.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
-            v = v.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
-            attn = (q @ k_.transpose(-2, -1)) / (HEAD_DIM ** 0.5)
-            attn = attn.softmax(dim=-1)
-            o = (attn @ v).transpose(1, 2).contiguous().view(B, -1, D)
-            o = F.linear(o, self._g(p + 'proj.weight'), self._g(p + 'proj.bias'))
-            if bgains is not None and bgains[2 * li]:
-                o = o * float(PHI ** bgains[2 * li])
-            ls1 = self._g(p + 'ls1')
-            # layer_scale lambda is [384] — broadcast over B,N
-            x = x + o * ls1
-            # MLP block
-            h2 = F.layer_norm(x, (D,), self._g(p + 'norm2.weight'), self._g(p + 'norm2.bias'))
-            h2 = F.linear(h2, self._g(p + 'mlp1.weight'), self._g(p + 'mlp1.bias'))
-            h2 = F.gelu(h2)
-            h2 = F.linear(h2, self._g(p + 'mlp2.weight'), self._g(p + 'mlp2.bias'))
-            if bgains is not None and bgains[2 * li + 1]:
-                h2 = h2 * float(PHI ** bgains[2 * li + 1])
-            ls2 = self._g(p + 'ls2')
-            x = x + h2 * ls2
+            # attention block (skippable: residual-only passthrough)
+            if 2 * li in drop:
+                pass
+            else:
+                h = F.layer_norm(x, (D,), self._g(p + 'norm1.weight'), self._g(p + 'norm1.bias'))
+                q = F.linear(h, self._g(p + 'q.weight'), self._g(p + 'q.bias'))
+                k_ = F.linear(h, self._g(p + 'k.weight'), self._g(p + 'k.bias'))
+                v = F.linear(h, self._g(p + 'v.weight'), self._g(p + 'v.bias'))
+                q = q.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
+                k_ = k_.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
+                v = v.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
+                attn = (q @ k_.transpose(-2, -1)) / (HEAD_DIM ** 0.5)
+                attn = attn.softmax(dim=-1)
+                o = (attn @ v).transpose(1, 2).contiguous().view(B, -1, D)
+                o = F.linear(o, self._g(p + 'proj.weight'), self._g(p + 'proj.bias'))
+                if bgains is not None and bgains[2 * li]:
+                    o = o * float(PHI ** bgains[2 * li])
+                ls1 = self._g(p + 'ls1')
+                # layer_scale lambda is [384] — broadcast over B,N
+                x = x + o * ls1
+            # MLP block (skippable: residual-only passthrough)
+            if 2 * li + 1 in drop:
+                pass
+            else:
+                h2 = F.layer_norm(x, (D,), self._g(p + 'norm2.weight'), self._g(p + 'norm2.bias'))
+                h2 = F.linear(h2, self._g(p + 'mlp1.weight'), self._g(p + 'mlp1.bias'))
+                h2 = F.gelu(h2)
+                h2 = F.linear(h2, self._g(p + 'mlp2.weight'), self._g(p + 'mlp2.bias'))
+                if bgains is not None and bgains[2 * li + 1]:
+                    h2 = h2 * float(PHI ** bgains[2 * li + 1])
+                ls2 = self._g(p + 'ls2')
+                x = x + h2 * ls2
             if (li + 1) in want:
                 stages[li + 1] = x
 

@@ -35,6 +35,11 @@ branch and does not touch `main` or the upstream foundry repo.
   backbone mixing ratios. Searched to exhaustion (77 trials): all moves
   rejected, with measured sensitivity decreasing with depth (L0-attn×φ
   → 0.47, L11-mlp×φ → 0.994). See NOTES.
+- `dropped` — sorted unique block ids 0..23 to skip (residual-only).
+  Searched under EfficiencyRule with honest param-byte accounting
+  (`python adapt/drop_search.py`): all 24 singles + best pairs rejected
+  at parity. Ranked dispensability is non-monotonic (L11-mlp 0.953 best,
+  L5-mlp 0.264 worst). No deletable blocks — reported, not hidden.
 
 Seed = exact replication. `propose()` enumerates single moves
 (readout±1, one scale ±1, head flip) with rationale; the core's
@@ -48,6 +53,7 @@ learner exactly as the foundry roadmap asks for.
 python adapt/build_fixtures.py   # one-time: HF oracle renders refs (needs baked weights + HF)
 python adapt/test_smoke.py       # fast: DSL + neighbor enumeration, no torch
 python adapt/run_search.py       # architecture search (GPU recommended)
+python adapt/drop_search.py      # block-drop search under EfficiencyRule (leaner-model attempts)
 python adapt/graduate.py         # LUT-width search under EfficiencyRule
 python adapt/emit_c.py           # emit C model from sealed incumbent (bit-exact test)
 ```
