@@ -23,6 +23,11 @@ mod 2^64 via `uint64_t` accumulators, identical to numpy int64; the head
 dot uses `__int128` (matches Python's unbounded ints at these sizes).
 Bounds are documented in `fixed_nn.h`, not checked.
 
+Unification note: table sizes bind LATE (unsized externs +
+`#ifndef`-guarded `PHI_DMAX`/`PHI_FRAC_CAP`/`PHI_EXP_MAX`). Each model
+build compiles the same core against its own emitted tables + caps —
+no per-model kernel copies. `make test` covers the full-size binding.
+
 ## What's inside
 
 - `phi_int.c` — LUT-add accumulation, fixed-point bridge, head, softmax, GELU.

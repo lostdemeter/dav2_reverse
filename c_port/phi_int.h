@@ -15,17 +15,31 @@
 #define PHI_K 512
 #define PHI_BIAS 32768
 #define PHI_MAX_EXP 65535
-#define PHI_DMAX 4096
-#define PHI_FRAC_CAP 13312
 #define PHI_FIXED_F 18
 
-/* ---- LUTs (generated/luts.h) ---- */
-extern const int32_t PHI_ADD_LUT[4097];
-extern const int32_t PHI_SUB_LUT[4097];
-extern const int32_t PHI_FRAC_LUT[13313];
+/* Per-build narrowable caps. A model build overrides these (via a
+ * generated caps header or -D flags) to match its emitted tables;
+ * defaults reproduce the full tables. COARSE/FINE/GELU/BASIS/FIBTAB
+ * are format-fixed and never narrowed. */
+#ifndef PHI_DMAX
+#define PHI_DMAX 4096
+#endif
+#ifndef PHI_FRAC_CAP
+#define PHI_FRAC_CAP 13312
+#endif
+#ifndef PHI_EXP_MAX
+#define PHI_EXP_MAX 262144
+#endif
+
+/* ---- LUTs (generated/luts.h, or per-model emitted tables) ----
+ * Unsized externs deliberately: each build links exactly one table set
+ * (full or narrowed); sizes are carried by the caps above. */
+extern const int32_t PHI_ADD_LUT[];
+extern const int32_t PHI_SUB_LUT[];
+extern const int32_t PHI_FRAC_LUT[];
 extern const int32_t PHI_COARSE_LUT[193];   /* index t+64, t in [-64,128] */
 extern const int32_t PHI_FINE_LUT[16384];   /* 15-bit mantissa */
-extern const int32_t PHI_EXP_LUT[262145];   /* 2^24 * e^(-d/2^14) */
+extern const int32_t PHI_EXP_LUT[];         /* 2^24 * e^(-d/2^14), size PHI_EXP_MAX+1 */
 extern const int32_t PHI_GELU_LUT[262145];  /* 2^14 * gelu((k-span)/2^14) */
 #define PHI_GELU_SPAN (8 * 16384)
 

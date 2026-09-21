@@ -110,7 +110,7 @@ void phi_softmax(const int64_t *scores, int n, int64_t *num, int64_t *den) {
     for (i = 1; i < n; i++) if (scores[i] > vmax) vmax = scores[i];
     for (i = 0; i < n; i++) {
         int64_t d = vmax - scores[i];
-        int32_t idx = d > 262144 ? 262144 : (int32_t)d;
+        int32_t idx = d > PHI_EXP_MAX ? PHI_EXP_MAX : (int32_t)d;
         num[i] = (int64_t)PHI_EXP_LUT[idx];
         dsum += num[i];
     }

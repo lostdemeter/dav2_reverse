@@ -75,7 +75,7 @@ class GeometricDinov2Backbone(torch.nn.Module):
         return self._w[name]
 
     def forward_stages(self, pixel_values: torch.Tensor, taps=None, bgains=None,
-                         dropped=None):
+                         dropped=None, zero_heads=None):
         """
         Args: pixel_values [B,3,H,W] float32.
               taps: 1-indexed layer numbers to tap (default OUT_STAGES).
@@ -85,6 +85,8 @@ class GeometricDinov2Backbone(torch.nn.Module):
                 output gains survive it by changing residual mixing ratios.
               dropped: set/list of block indices 0..23 (even=attn, odd=mlp of
                 layer i//2) to skip entirely (residual-only passthrough).
+              zero_heads: set/list of (layer, head) pairs to ablate (head
+                contribution zeroed before the output projection).
         Returns: list of feature maps [B,384,H/14,W/14] in tap order,
                  plus patch_h, patch_w.
         """
@@ -95,6 +97,9 @@ class GeometricDinov2Backbone(torch.nn.Module):
             assert len(bgains) == 2 * LAYERS, f"bgains needs {2 * LAYERS} ints"
         drop = set(dropped) if dropped else set()
         assert all(0 <= b < 2 * LAYERS for b in drop), f"dropped out of range: {drop}"
+        zh = set(zero_heads) if zero_heads else set()
+        assert all(0 <= li < LAYERS and 0 <= h < HEADS for li, h in zh), \
+            f"zero_heads out of range: {zh}"
         B, _, H, W = pixel_values.shape
         x = pixel_values.to(self.device)
         ph, pw = H // PATCH, W // PATCH
@@ -143,6 +148,9 @@ class GeometricDinov2Backbone(torch.nn.Module):
                 attn = (q @ k_.transpose(-2, -1)) / (HEAD_DIM ** 0.5)
                 attn = attn.softmax(dim=-1)
                 o = (attn @ v).transpose(1, 2).contiguous().view(B, -1, D)
+                for h in range(HEADS):
+                    if (li, h) in zh:
+                        o[:, :, h * HEAD_DIM:(h + 1) * HEAD_DIM] = 0
                 o = F.linear(o, self._g(p + 'proj.weight'), self._g(p + 'proj.bias'))
                 if bgains is not None and bgains[2 * li]:
                     o = o * float(PHI ** bgains[2 * li])

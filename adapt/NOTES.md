@@ -127,12 +127,29 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   (+119,560 B, no gain). Audit 0.9948–0.9979 (same integer path as
   before, deterministic). No overshoot: the objective now sees what the
   evaluator sees.
-- MID-RANGE GOAL (agreed): C emitter — TrialSpec DSL as intermediate
-  language, artifact JSON → kernel registry → `model.c` against
-  `phi_int.c`/`fib_solve.c`, emission gated on sealed incumbents only,
-  bit-exact host tests per kernel. Learn more first (this round), emit
-  second. The honest-bytes accounting is already the emitter's cost
-  model.
+## 2026-09-21 — finer granularity: heads nearly hold, unification ships
+
+- Head-ablation sweep (all 72: single-head zeroing, exploration corrs):
+  best L1h0 0.99882 / L0h4 0.99873 — but mins 0.9976/0.9980, below the
+  0.999 bar on every head. Verdict: finer granularity does NOT hold
+  parity. Chasing it would mean moving the bar, which is ruled out.
+  The near-miss ranking is kept as evidence (early-layer heads most
+  redundant — same direction as the tap-2 tie, interestingly).
+- So: emitter + C unification, per the agreement. `phi_int.h` now uses
+  unsized externs + `#ifndef`-guarded caps (DMAX/FRAC_CAP/EXP_MAX);
+  `make test` unchanged (defaults identical, ALL PASS). The emitter
+  compiles per-model tables + caps against the unified core — the
+  `model_head.c` duplication is DELETED, tree and fixed both 0/64
+  bit-exact. Fixed expectations are computed under patched narrowed
+  tables (graduate.evaluate's save/restore pattern), so they hold at
+  any widths. Firmware-style `--gc-sections` linking throughout.
+- LIBRARY: the unification pattern — core binds sizes late (unsized
+  externs + guarded caps), emitter binds them per artifact, bit-exact
+  tests per binding. Any adapter can copy this shape.
+- Shippable statement, earned: `python adapt/emit_c.py` turns the
+  sealed {13312,8,4096}-tree incumbent into 544 kB of tables + weights
+  + a compiled, bit-exact-tested C model. Search → ship, no human in
+  the middle.
 
 ## 2026-09-21 — both tracks: emitter scaffold + analytic candidate
 
