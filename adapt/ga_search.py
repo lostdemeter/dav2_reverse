@@ -61,6 +61,8 @@ def main():
     shared, fixtures, probe = W.load_all(device)
     search_fx = {r: fixtures[r] for r in ('exploration', 'gate', 'retention')}
     adapter = W.WidthAdapter(shared, search_fx, probe)
+    from baseline import check_baseline, parity_gate
+    check_baseline(adapter, parity_gate(W.CORR_PASS_INT), label="width-seed")
     seed_bytes = W.table_bytes(dict(W.SEED))
     total_cases = sum(len(search_fx[r]) for r in search_fx) + 1  # +softmax probe
 

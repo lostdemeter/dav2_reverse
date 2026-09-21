@@ -36,6 +36,22 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   never collapsed to 0) — the fingerprint instrumentation earned its
   keep as an observer even before niching uses it.
 
+## 2026-09-21 — fixing the failure mode itself (3 layers)
+
+- Trial lines now print ABSOLUTES (`cand[e6/7 g4/4 r3/3] inc[e7/7...]`)
+  in all four drivers — the display fault that hid 2/14 ties is gone.
+  Verified live: the exp4 rejection now reads as what it is.
+- `adapt/baseline.py`: pre-flight gate (build+evaluate seed, refuse on
+  failure, assert determinism by double evaluation) wired into all four
+  drivers; 6 new smoke tests green. Overhead ~2 extra evaluations,
+  documented as accepted duplication that keeps core semantics intact.
+- `adapt/BASELINE_UPSTREAM.md`: the core proposal — optional
+  `baseline_gate` on Experimenter reusing the existing
+  `baseline_failed` stop reason, why wrapper-only is a stopgap, and the
+  one-line-per-callsite Echion migration. Filed here first as portable
+  form; upstream PR + Echion vendor update are the next steps, not this
+  branch's job.
+
 ## 2026-09-21 — scaffold + first search
 
 - The vendored core worked untouched: seed/baseline, neighbor proposals,

@@ -156,5 +156,72 @@ check(b0 - b_mlp == MLP_BLOCK_PARAMS * 4 == 1182336 * 4,
       f"drop mlp block saves exactly {MLP_BLOCK_PARAMS * 4}B")
 check(_model_bytes(dict(SEED_CONFIG, dropped=[0, 1]), None)
       == b0 - (592128 + 1182336) * 4, "drops compose additively")
+
+from baseline import BaselineFailed, check_baseline, fmt_counts, parity_gate
+from experimenter import Measurement as _M
+
+
+def _synth_meas(correct_map, means, nbytes=1000):
+    def card(ds, n, c):
+        return Scorecard(ds, tuple(
+            __import__('experimenter').CaseResult(f"{ds}-{i}", True, i < c, "")
+            for i in range(n)))
+    exp = card("e", 7, correct_map[0])
+    gate = card("g", 4, correct_map[1])
+    ret = card("r", 3, correct_map[2])
+    diags = {r: {"mean_corr": m} for r, m in
+             zip(("exploration", "gate", "retention"), means)}
+    return _M(exp, gate, ret, nbytes, diags)
+
+
+class _FakeAdapter:
+    def __init__(self, meas, flip=False):
+        self._meas = meas
+        self._flip = flip
+        self._n = 0
+
+    def seed(self):
+        from experimenter import TrialSpec
+        return TrialSpec("seed", {"k": 1}, "seed")
+
+    def build(self, proposal):
+        return {"k": 1}
+
+    def evaluate(self, artifact):
+        self._n += 1
+        if self._flip and self._n > 1:
+            other = _synth_meas((0, 0, 0), (0.5, 0.5, 0.5))
+            return other
+        return self._meas
+
+    def fingerprint(self, artifact):
+        import hashlib, json
+        return hashlib.sha256(json.dumps(artifact, sort_keys=True).encode()).hexdigest()
+
+
+full = _synth_meas((7, 4, 3), (0.9995, 0.9995, 0.9995)).as_dict()
+check(fmt_counts(full) == "e7/7 g4/4 r3/3", "fmt_counts absolutes")
+gate = parity_gate(0.99)
+ok, reason = gate(full)
+check(ok, f"passing baseline passes gate ({reason})")
+thin = _synth_meas((2, 0, 1), (0.997, 0.995, 0.998)).as_dict()
+ok, reason = gate(thin)
+check(not ok, f"failing baseline fails gate ({reason})")
+m = check_baseline(_FakeAdapter(_synth_meas((7, 4, 3), (0.9995, 0.9995, 0.9995))),
+                   parity_gate(0.99), label="fake-pass")
+check(m["exploration"]["counts"]["correct"] == 7, "pre-flight returns measurement")
+try:
+    check_baseline(_FakeAdapter(_synth_meas((2, 0, 1), (0.997, 0.995, 0.995))),
+                   parity_gate(0.99), label="fake-fail")
+    check(False, "pre-flight refuses failing baseline")
+except BaselineFailed as e:
+    check("refusing to search" in str(e), "pre-flight refuses failing baseline")
+try:
+    check_baseline(_FakeAdapter(_synth_meas((7, 4, 3), (0.9995, 0.9995, 0.9995)),
+                                flip=True),
+                   parity_gate(0.99), label="fake-flip")
+    check(False, "pre-flight catches nondeterminism")
+except BaselineFailed as e:
+    check("nondeterministic" in str(e), "pre-flight catches nondeterminism")
 print("SMOKE:", "PASS" if fails == 0 else "FAIL")
 raise SystemExit(1 if fails else 0)

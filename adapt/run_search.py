@@ -75,6 +75,9 @@ def main():
     shared = load_shared(device)
     fixtures = load_fixtures(include_audit=False)
     adapter = DepthAdapter(shared, fixtures)
+    from baseline import check_baseline, fmt_counts, parity_gate
+    from depth_adapter import CORR_PASS
+    check_baseline(adapter, parity_gate(CORR_PASS), label="arch-seed")
     lab = Experimenter(adapter, max_trials=args.trials, rule=PromotionRule())
     t0 = time.perf_counter()
     last_hist = 0
@@ -83,9 +86,12 @@ def main():
         if len(st['history']) > last_hist:
             last_hist = len(st['history'])
             h = st['history'][-1]
+            inc = st['incumbent']['measurement'] if st['incumbent'] else None
             print(f"trial {h['trial']}: {h['proposal']['name']} -> "
                   f"{h['decision']['action']} {h['decision']['reasons']} "
-                  f"{json.dumps(h['decision'].get('deltas', {}))}", flush=True)
+                  f"{json.dumps(h['decision'].get('deltas', {}))} "
+                  f"cand[{fmt_counts(h['measurement'])}]"
+                  f"{' inc[' + fmt_counts(inc) + ']' if inc else ''}", flush=True)
     dt = time.perf_counter() - t0
     final = lab.model()
     print(f"\nstop: {lab.state()['stop_reason']}  sealed: {lab.state()['sealed']}")
