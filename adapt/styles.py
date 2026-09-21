@@ -299,3 +299,94 @@ def style_crossover_joint(rng, a, b):
             out[k] = copy.deepcopy(src[k])
     return validate_joint({"arch": {k: out[k] for k in ARCH_KEYS},
                            "width": {k: out[k] for k in WIDTH_KEYS}})
+
+
+def phase_mate_select(rng, sigs, anchor, k=3, exploit_p=0.7):
+    """Second-parent choice by phase position (geometric mating).
+
+    With prob exploit_p: nearest phase-neighbor of the anchor among k
+    random candidates (exploit the style-cluster); else a random
+    individual (explore). Anchor is normally the tournament winner.
+    sigs: zeta signatures aligned with pop indices.
+    """
+    others = [i for i in range(len(sigs)) if i != anchor]
+    if not others:
+        return anchor
+    if rng.random() >= exploit_p:
+        return rng.choice(others)
+    cands = rng.sample(others, min(k, len(others)))
+    return min(cands, key=lambda i: zeta_distance(sigs[anchor], sigs[i]))
+
+
+def _as_value(v):
+    return tuple(v) if isinstance(v, list) else v
+
+
+def _mi_pair(xs, ys, alpha=1.0):
+    """Mutual information (nats) with Laplace smoothing. xs/ys: value lists."""
+    import math
+    n = len(xs)
+    vx, vy = sorted(set(xs)), sorted(set(ys))
+    nx, ny = len(vx), len(vy)
+    if nx < 2 or ny < 2:
+        return 0.0
+    ix = {v: i for i, v in enumerate(vx)}
+    iy = {v: i for i, v in enumerate(vy)}
+    joint = [[alpha] * ny for _ in range(nx)]
+    for x, y in zip(xs, ys):
+        joint[ix[x]][iy[y]] += 1.0
+    tot = n + alpha * nx * ny
+    mi = 0.0
+    for i in range(nx):
+        px = sum(joint[i]) / tot
+        for j in range(ny):
+            p = joint[i][j] / tot
+            py = sum(joint[r][j] for r in range(nx)) / tot
+            mi += p * math.log(p / (px * py))
+    return mi
+
+
+def learn_groups(history, n_groups=4, top_frac=0.5, alpha=1.0):
+    """Propose DSL regrouping from measured co-success (the proposer,
+    mechanized — no taste, only correlations over gate verdicts).
+
+    history: list of (flat genotype dict, correct, bytes).
+    Method: rank by (-correct, bytes), take top half; keys constant
+    across it are the CONVERGED (load-bearing) set; over varying keys,
+    greedy agglomerative clustering on Laplace-smoothed pairwise MI down
+    to n_groups. Coarse at small samples — stated; the race (not the
+    statistic's elegance) judges the proposal.
+    Returns {"groups", "converged", "n_top", "top_mi_pairs"}.
+    """
+    ranked = sorted(history, key=lambda r: (-r[1], r[2]))
+    top = ranked[:max(2, int(len(ranked) * top_frac))]
+    keys = sorted(top[0][0].keys())
+    cols = {k: [_as_value(r[0][k]) for r in top] for k in keys}
+    converged = sorted(k for k in keys if len(set(cols[k])) < 2)
+    varying = [k for k in keys if k not in converged]
+    mi = {}
+    for a in range(len(varying)):
+        for b in range(a + 1, len(varying)):
+            mi[(varying[a], varying[b])] = _mi_pair(
+                cols[varying[a]], cols[varying[b]], alpha)
+    clusters = [{k} for k in varying]
+    while len(clusters) > max(1, n_groups):
+        best, best_v = None, -1.0
+        for a in range(len(clusters)):
+            for b in range(a + 1, len(clusters)):
+                pairs = [mi.get(tuple(sorted((x, y))), 0.0)
+                         for x in clusters[a] for y in clusters[b]]
+                v = sum(pairs) / len(pairs)
+                if v > best_v:
+                    best, best_v = (a, b), v
+        if best is None:
+            break
+        a, b = best
+        clusters[a] = clusters[a] | clusters[b]
+        del clusters[b]
+    groups = [sorted(c) for c in clusters]
+    if converged:
+        groups.append(sorted(converged))
+    topp = sorted(mi.items(), key=lambda kv: -kv[1])[:6]
+    return {"groups": groups, "converged": converged, "n_top": len(top),
+            "top_mi_pairs": [(list(k), round(v, 3)) for k, v in topp]}

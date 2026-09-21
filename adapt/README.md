@@ -67,6 +67,12 @@ G2={exp,accum} travel as units). Measured verdict on the 48-config
 width space: no mode beats luck (all hits gen 0-1) — the discriminating
 arena is the joint architecture+width co-search. See NOTES.
 
+Co-search (`python adapt/ga_cosearch.py [--mode flat|style]`) — full
+writeup in the level-2 section above; `--mate random|phase` selects
+second-parent choice (uniform vs phase-neighborhood). Measured:
+phase mating 0/3 vs random 2/3 at exploit 0.7 — over-exploitation,
+kept as a parameter point.
+
 Co-search (`python adapt/ga_cosearch.py [--mode flat|style]`): one
 genotype spans both DSLs (7 arch + 4 width keys), one byte counter
 (param bytes + table bytes), 27/27 joint bar, seeded starts. 3 seeds
@@ -74,6 +80,12 @@ per arm: style hits at 13/16 evals (2/3), flat once late (~20, 1/3).
 Winners are cross-DSL assemblies (intact arch + exp8 tables) — the
 move single-key mixing rarely builds. Suggestive (n=3), mechanism
 visible. Joints audited on both harnesses post-run.
+
+Geometric proposer (`adapt/styles.py`: `phase_mate_select`,
+`learn_groups`): mating by phase position; regrouping from co-success
+MI with converged keys reported separately. On 107 histories it
+re-derived 3/4 hand groups and correctly refused to group constant
+dmax. Next receipt: race learned groups vs hand groups.
 
 Fixtures (`adapt/fixtures/`, gitignored): 6 exploration + 4 gate scenes,
 3 retention anchors (gradient/checker/disc), 4 sealed audit scenes, all

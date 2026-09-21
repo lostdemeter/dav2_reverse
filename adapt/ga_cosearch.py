@@ -55,6 +55,9 @@ def main():
                     help='per-child mutation probability (low so crossover '
                          'does the work; the comparison under test)')
     ap.add_argument('--mode', choices=("flat", "style"), default="flat")
+    ap.add_argument('--mate', choices=("random", "phase"), default="random",
+                    help="second-parent choice: uniform random mating vs "
+                         "phase-neighborhood mating (geometric proposer)")
     args = ap.parse_args()
 
     import torch
@@ -145,9 +148,13 @@ def main():
                  else S.crossover_joint_flat)
         while len(elites) + len(children) < args.pop:
             a, b = rng.sample(range(len(pop)), 2)
-            pa = pop[a] if order.index(a) <= order.index(b) else pop[b]
-            c, d = rng.sample(range(len(pop)), 2)
-            pc = pop[c] if order.index(c) <= order.index(d) else pop[d]
+            ai = a if order.index(a) <= order.index(b) else b
+            pa = pop[ai]
+            if args.mate == "phase":
+                pc = pop[S.phase_mate_select(rng, sigs, ai)]
+            else:
+                c, d = rng.sample(range(len(pop)), 2)
+                pc = pop[c] if order.index(c) <= order.index(d) else pop[d]
             child = cross(rng, pa, pc)
             if rng.random() < args.mutprob:
                 child = S.mutate_joint(rng, child)
@@ -195,6 +202,10 @@ def main():
         print(f"  arch {cid}: corr={arch_corr(pred, ref):.5f}")
     runs = ADAPT / 'runs'
     runs.mkdir(exist_ok=True)
+    hist = [{"geno": {**v[5], **v[6]}, "correct": v[2][0], "bytes": v[2][1]}
+            for v in cache.values()]
+    (runs / f'cohistory_{args.mode}_{args.mate}_{args.seed}.json').write_text(
+        json.dumps(hist, indent=0, default=str))
     (runs / f'cosearch_{args.mode}_{args.seed}.json').write_text(json.dumps(
         {"mode": args.mode, "winners": bool(winners),
          "first_hit": first_hit, "best": audit_cfg,

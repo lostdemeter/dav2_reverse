@@ -3,6 +3,30 @@
 Working log for the experimental branch. Kept because several findings
 generalize to adaptation_foundry as a library (flagged LIBRARY below).
 
+## 2026-09-21 — the proposer closes one loop (learned groups ≈ hand groups)
+
+- `learn_groups` (MI + agglomerative over top-half histories, converged
+  keys reported separately) ran on 107 evaluated genotypes from 6
+  co-search runs. Proposed: [accum,block_gains,dropped,head] +
+  [exp_span,frac_cap] + [readout,taps] + [res_scales,tap_gains], with
+  dmax flagged CONVERGED (never varies among winners — true: dmax1024
+  always fails). Hand design: identical on 3 of 4 groups; the only
+  difference is the learner refusing to group a constant. Top MI pairs
+  (block_gains×head 0.374, res_scales×tap_gains 0.364) are the
+  co-adaptation pairs a human would draw.
+- Stated carefully: n=107 histories, mostly failures, coarse statistic.
+  But the direction is right — the system re-derived its own DSL
+  decomposition from gate verdicts alone. That is one full turn of the
+  loop the grand-strategy discussion asked for: search producing the
+  guidance for the next search. Next: race learned groups vs hand
+  groups as crossover units (the receipt that decides).
+- Phase mating, honestly negative: 0/3 hits vs random mating's 2/3
+  (same seeds, style crossover fixed). exploit_p=0.7 nearest-neighbor
+  mating inbreeds — small steps, many unique evals (22-24 vs 11-16),
+  no hits. Over-exploitation, and k=3 neighborhoods at pop 6 are too
+  weak an instrument to conclude anything general about geometric
+  mating. Kept as a parameter point, not a verdict on the idea.
+
 ## 2026-09-21 — co-search: style crossover beats flat mixing (n=3/arm, suggestive)
 
 - Joint genotype (7 arch keys + 4 width keys), joint bytes (param bytes
