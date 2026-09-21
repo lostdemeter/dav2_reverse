@@ -139,6 +139,37 @@ Measured 2026-09-21 (CUDA, fp32 unless noted):
 | demo scene vs HF | corr=0.999914 |
 | real webcam frame, shared input, fp32 | corr=0.999990 |
 | live webcam fp16 | ~95–100 FPS after warmup, corr≈0.986–0.998 (fp16+resize diff) |
+| live webcam CPU-only (`--cpu`, 364px) | ~15 FPS, no GPU needed |
+
+## CPU-only
+
+No GPU required. The pipeline falls back to CPU automatically; `--cpu`
+forces it (with a smaller 364px default input for speed):
+
+```bash
+python geo_webcam.py --cpu              # ~15 FPS on desktop CPU
+python geo_webcam.py --cpu --size 518   # full res, slower (~7 FPS first frame)
+```
+
+## No-FPU prototype (`geo_int.py`)
+
+Yes — the phi math genuinely doesn't need an FPU at runtime. A value is
+`sign × φ^(exp/512)`, so multiply is integer exponent addition (+ sign
+XOR) and add/sub is an integer LUT over the exponent difference
+(`φ^a+φ^b = φ^(max+LUT[max−min])`). LUTs are baked offline; the runtime
+path is add/sub/compare/XOR + LUT gather only. This matches the earlier
+`integer_phi_engine.py` / `phi_avx512.c` work (integer XOR+ADD engine,
+LUT-only decode).
+
+`geo_int.IntegerPhiHead` proves the accumulation core on the 32-wide
+depth head: integer-head vs float-head corr=0.999751, ~29 µs/px in a
+pure-Python int loop (~8 s/frame at 518² — a Numba/C port per the
+`jit_phi_matmul.py` precedent would bring 100–1000×). Honest boundaries:
+feature *encoding* (float→int) and final decode-for-display still use
+floats — on FPU-free hardware the sensor front-end would emit
+fixed-point ints with an integer encode LUT (future work), as would the
+remaining ViT nonlinearities (softmax/norm/GELU each become bounded
+integer LUTs, standard quantized-inference practice).
 
 ## Repository Structure
 
@@ -155,7 +186,8 @@ phi-depth/
 ├── geo_neck.py            # Geometric DPT reassemble+fusion + export_from_hf()
 ├── geo_head.py            # Geometric head + AnalyticHead + export_from_hf()
 ├── geo_depth.py           # End-to-end geometric DAV2 (no transformers)
-├── geo_webcam.py          # Live fully-geometric webcam test
+├── geo_webcam.py          # Live fully-geometric webcam test (--cpu for CPU-only)
+├── geo_int.py             # Integer-only (no-FPU) phi core + head prototype
 ├── export_geometric_weights.py  # One-time HF->phi bake (builds gitignored npz)
 ├── test_geometric_parity.py     # Parity suite (corr > 0.999)
 ├── demo_geometric.py            # HF->geometric demo figure (no webcam)

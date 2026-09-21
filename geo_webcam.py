@@ -50,9 +50,15 @@ def main():
     ap.add_argument('--compare-hf', action='store_true',
                     help='also run HF baseline on captured frames for parity')
     ap.add_argument('--no-fp16', action='store_true')
+    ap.add_argument('--cpu', action='store_true',
+                    help='force CPU-only (no GPU needed, slower, smaller default size)')
+    ap.add_argument('--size', type=int, default=None,
+                    help='input long side (default 518, use 364/336 on CPU for speed)')
     args = ap.parse_args()
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if args.size is None:
+        args.size = 364 if args.cpu else 518
+    device = torch.device('cpu' if args.cpu else ('cuda' if torch.cuda.is_available() else 'cpu'))
     use_fp16 = (not args.no_fp16) and device.type == 'cuda'
     print(f"device: {device}  fp16: {use_fp16}")
 
@@ -90,7 +96,7 @@ def main():
     def process(rgb_float):
         """RGB float [0,1] -> geometric depth float32."""
         from geo_depth import preprocess
-        pv = preprocess(rgb_float)
+        pv = preprocess(rgb_float, size=args.size)
         if use_fp16:
             pv = pv.half()
         with torch.no_grad():
