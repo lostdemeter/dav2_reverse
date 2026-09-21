@@ -3,6 +3,29 @@
 Working log for the experimental branch. Kept because several findings
 generalize to adaptation_foundry as a library (flagged LIBRARY below).
 
+## 2026-09-21 — co-search: style crossover beats flat mixing (n=3/arm, suggestive)
+
+- Joint genotype (7 arch keys + 4 width keys), joint bytes (param bytes
+  + table bytes — both levers move one counter), joint bar 27/27 at
+  respective harness bars, seeded starts (random starts provably
+  hopeless: 0 holders in 6 runs — the space needs good material first,
+  another honest negative).
+- Race, pop 6 / gens 8 / mutprob 0.3, same seeds: STYLE hits at 13 and
+  16 unique evals (2/3 seeds); FLAT hits once post-loop (~20 evals),
+  misses twice. Winners are exactly cross-DSL assemblies both times:
+  intact arch (seed taps/gains/head) + exp8 tables ({4096,8,4096} and
+  {13312,8,4096}) — the combination single-key mixing rarely builds
+  but group moves (G4 tables as a unit) construct directly.
+- Stated carefully: n=3 per arm is SUGGESTIVE, not conclusive. What IS
+  conclusive: the machinery runs clean (pre-flight gates, sealed
+  audits both harnesses, front hashes), and the winners' form matches
+  the mechanism (cross-DSL bundles, not scattered keys).
+- LIBRARY: co-search is the first workload here that single-move walk
+  structurally cannot do well (it never holds two DSLs at once while
+  changing both). If the foundry wants a flagship demo beyond Futhark,
+  this shape — joint genotype, unified byte objective, style-group
+  crossover, sealed dual audit — is the template.
+
 ## 2026-09-21 — CORRECTION: the integer-harness bar was unreachable
 
 - The GA calibration failed twice (best 2/14), which smelled wrong and

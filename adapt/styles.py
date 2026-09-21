@@ -166,3 +166,136 @@ def style_crossover(rng, a, b):
         for k in group:
             cfg[k] = src[k]
     return graduate.validate_widths(cfg)
+
+
+# Joint architecture+width co-search. One genotype spans both DSLs so a
+# single child can inherit structure from one parent and tables from the
+# other — the move single-DSL neighbor search cannot make. Groups are
+# deliberately CROSS-DSL: the thesis under test is that co-adapted
+# structure+table bundles travel better than scattered keys.
+JOINT_GROUPS = (("readout", "taps"),                     # structure
+                ("res_scales", "tap_gains"),             # interface gains
+                ("head", "block_gains", "dropped", "accum"),  # compute
+                ("frac_cap", "exp_span", "dmax"))         # tables
+ARCH_KEYS = ("readout", "res_scales", "head", "taps", "tap_gains",
+             "block_gains", "dropped")
+WIDTH_KEYS = ("frac_cap", "exp_span", "dmax", "accum")
+
+
+def validate_joint(geno):
+    """Validate a joint genotype {"arch": {...}, "width": {...}}."""
+    import depth_adapter as D
+    import graduate as W
+    if not isinstance(geno, dict) or set(geno) != {"arch", "width"}:
+        raise ValueError("joint genotype needs exactly arch/width")
+    return {"arch": D.validate_config(dict(geno["arch"])),
+            "width": W.validate_widths(dict(geno["width"]))}
+
+
+def joint_identifier(geno):
+    c = validate_joint(geno)
+    return hashlib.sha256(json.dumps(c, sort_keys=True).encode()).hexdigest()
+
+
+def random_joint(rng):
+    """Uniform random joint genotype."""
+    import depth_adapter as D
+    import graduate as W
+    arch = {"readout": rng.choice(D.READOUTS),
+            "res_scales": [rng.randint(D.SCALE_LO, D.SCALE_HI) for _ in range(4)],
+            "head": rng.choice(D.HEADS),
+            "taps": [rng.choice(band) for band in D.TAP_BANDS],
+            "tap_gains": [rng.randint(D.GAIN_LO, D.GAIN_HI) for _ in range(4)],
+            "block_gains": [rng.randint(D.BGAIN_LO, D.BGAIN_HI)
+                            for _ in range(D.N_BGAINS)],
+            "dropped": sorted(rng.sample(range(D.N_BGAINS),
+                                         rng.randint(0, 2)))}
+    # taps must strictly increase; resample bands until valid (bounded)
+    for _ in range(20):
+        if arch["taps"][0] < arch["taps"][1] < arch["taps"][2] < arch["taps"][3]:
+            break
+        arch["taps"] = [rng.choice(band) for band in D.TAP_BANDS]
+    width = {k: rng.choice(DOMAINS[k]) for k in WIDTH_KEYS}
+    return validate_joint({"arch": arch, "width": width})
+
+
+def mutate_joint(rng, geno):
+    """Resample one joint key (dropped toggles membership). Retries on
+    invalid (tap ordering); falls back to a parent copy."""
+    import copy
+    g = validate_joint(geno)
+    for _ in range(10):
+        out = {"arch": dict(g["arch"]), "width": dict(g["width"])}
+        side = rng.choice(("arch", "width"))
+        if side == "width":
+            k = rng.choice(WIDTH_KEYS)
+            out["width"][k] = rng.choice(DOMAINS[k])
+        else:
+            import depth_adapter as D
+            k = rng.choice(ARCH_KEYS)
+            if k == "readout":
+                out["arch"][k] = rng.choice(D.READOUTS)
+            elif k == "res_scales":
+                i = rng.randrange(4)
+                v = list(out["arch"][k])
+                v[i] = rng.randint(D.SCALE_LO, D.SCALE_HI)
+                out["arch"][k] = v
+            elif k == "head":
+                out["arch"][k] = rng.choice(D.HEADS)
+            elif k == "taps":
+                i = rng.randrange(4)
+                v = list(out["arch"][k])
+                v[i] = rng.choice(D.TAP_BANDS[i])
+                out["arch"][k] = v
+            elif k == "tap_gains":
+                i = rng.randrange(4)
+                v = list(out["arch"][k])
+                v[i] = rng.randint(D.GAIN_LO, D.GAIN_HI)
+                out["arch"][k] = v
+            elif k == "block_gains":
+                i = rng.randrange(D.N_BGAINS)
+                v = list(out["arch"][k])
+                v[i] = rng.randint(D.BGAIN_LO, D.BGAIN_HI)
+                out["arch"][k] = v
+            else:  # dropped: toggle one membership
+                s = set(out["arch"]["dropped"])
+                b = rng.randrange(D.N_BGAINS)
+                s.discard(b) if b in s else s.add(b)
+                out["arch"]["dropped"] = sorted(s)
+        try:
+            return validate_joint(out)
+        except ValueError:
+            continue
+    return copy.deepcopy(g)
+
+
+def crossover_joint_flat(rng, a, b):
+    """Uniform per-key crossover over all 11 joint keys."""
+    import depth_adapter as D
+    import graduate as W
+    va, vb = validate_joint(a), validate_joint(b)
+    arch = {k: rng.choice((va["arch"][k], vb["arch"][k])) for k in ARCH_KEYS}
+    # lists must be copied (choice returns references)
+    import copy
+    arch = {k: copy.deepcopy(v) for k, v in arch.items()}
+    width = dict(va["width"])
+    for k in WIDTH_KEYS:
+        if rng.random() < 0.5:
+            width[k] = vb["width"][k]
+    return validate_joint({"arch": arch, "width": width})
+
+
+def style_crossover_joint(rng, a, b):
+    """Group-level crossover over CROSS-DSL groups: co-adapted
+    structure+table bundles travel together."""
+    import copy
+    va, vb = validate_joint(a), validate_joint(b)
+    flat_a = {**va["arch"], **va["width"]}
+    flat_b = {**vb["arch"], **vb["width"]}
+    out = {}
+    for group in JOINT_GROUPS:
+        src = flat_a if rng.random() < 0.5 else flat_b
+        for k in group:
+            out[k] = copy.deepcopy(src[k])
+    return validate_joint({"arch": {k: out[k] for k in ARCH_KEYS},
+                           "width": {k: out[k] for k in WIDTH_KEYS}})
