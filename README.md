@@ -66,6 +66,29 @@ If you want to re-derive them from scratch:
 python fit_weights.py --images /path/to/some/images/
 ```
 
+## Fully-geometric pipeline (new)
+
+`phi_depth.py` above keeps the HF backbone/neck and only swaps the last
+`32->1` layer. The `geo_*` modules are the fully-geometric port — every
+weight (backbone ViT-S 22M, neck 2.7M, head 27K) is phi-encoded
+(`sign * PHI**((exp-32768)/512)`, K=512) with a shared LUT, ported from:
+
+- `phi_geometric/core/encoder.py` + `phi_cuda.py` (LUT) → `geo_lut.py`
+- `geometric_colorizer_v15_attention.py` (geometric attention) → `geo_backbone.py`
+- `da2_multiscale_phi.py` (phi-weighted fusion) → `geo_neck.py`
+- `experimental_decoder.py` (explicit PHI^0,-1,-2,-3 head) → `geo_head.AnalyticHead`
+
+```bash
+python export_geometric_weights.py   # one-time bake, needs HF (~94MB download)
+python test_geometric_parity.py      # expect corr > 0.999 on gradient+checker
+```
+
+`test_geometric_parity.py` (2026-09-21, CUDA): gradient corr=0.999995,
+checker corr=0.999998 vs `Depth-Anything-V2-Small-hf`. Inference
+(`geo_depth.GeometricDepthAnythingV2`) imports only torch+numpy — no
+`transformers`/HF download. Baked `weights/geometric_*.npz` are local-only
+(gitignored, reproducible); no push to GitHub until verified.
+
 ## Repository Structure
 
 ```
