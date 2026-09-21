@@ -23,6 +23,8 @@ nonlinearity becomes an integer LUT, as in quantized inference); this
 module proves the accumulation core on the 32-wide depth head.
 """
 
+import math
+
 import numpy as np
 from pathlib import Path
 
@@ -967,6 +969,251 @@ def transformer_layer_parity(size: int = 112):
     return ok
 
 
+# ---------------------------------------------------------------------------
+# Accumulation shootout: four traditions, one harness.
+#
+# The same dot product accumulated four ways (all on OUR K=512 weights):
+#   tree   — log-domain LUT-adds, pairwise (this file's production path)
+#   fixed  — fixed-point bridge, single rounding (this file)
+#   fib    — Fibonacci-coefficient exact accumulation (phi_lattice theory
+#            Pathology §11: decompose each term to 2K exact int coeffs,
+#            accumulate with ZERO rounding, single float solve at the
+#            display boundary; Python ints stand in for the theory's
+#            multi-limb solver, which firmware would need)
+#   taylor — table-free log-space Taylor addition (phi_geist vendor
+#            tradition: correction log_phi(1+x) via series, no LUTs).
+#            NOTE: Taylor evaluates its correction in floats at runtime,
+#            so it is NOT integer-only — included as a math comparison
+#            (tables vs compute tradeoff), labeled honestly throughout.
+# ---------------------------------------------------------------------------
+
+_fib_cache = {0: (0, 1), 1: (1, 1)}
+
+
+def _fib_pair(n: int):
+    """Exact (F_n, F_{n+1}) by fast doubling; negafibonacci for n<0.
+
+    F_0=0, F_1=1; F_{-n} = (-1)^{n+1} F_n. Python ints: exact, unbounded
+    (firmware needs the theory's multi-limb solver past ~F_92).
+    """
+    if n in _fib_cache:
+        return _fib_cache[n]
+    if n < 0:
+        # F_{-m} = (-1)^{m+1} F_m with m = -n > 0.
+        m = -n
+        a, b = _fib_pair(m)  # a = F_m, b = F_{m+1}; F_{m-1} = b - a
+        s = -1 if m % 2 == 0 else 1
+        out = (s * a, -s * (b - a))
+        _fib_cache[n] = out
+        return out
+    a, b = _fib_pair(n >> 1)
+    c = a * ((b << 1) - a)
+    d = a * a + b * b
+    out = (c, d) if n % 2 == 0 else (d, c + d)
+    _fib_cache[n] = out
+    return out
+
+
+def fib_dot_terms(s_terms, e_terms):
+    """Exact Fibonacci-coefficient dot product. (T,N) int -> float (N,).
+
+    Each term s*PHI^(u/K) (u = E-BIAS unbiased) splits by divmod(u,K)=(q,r):
+      PHI^(u/K) = F_q * PHI^((r+K)/K) + F_{q-1} * PHI^(r/K)
+    i.e. exactly 2 nonzero coeffs in a 2K lattice basis. Integer
+    accumulation is EXACT (no rounding anywhere); the single float solve
+    uses max-normalization so small groups aren't lost. Solve happens at
+    the display boundary (parity only) — cf. int_decode_array.
+    """
+    s_terms = np.asanyarray(s_terms, dtype=np.int64)
+    e_terms = np.asanyarray(e_terms, dtype=np.int64)
+    T, N = s_terms.shape
+    U = e_terms - BIAS
+    Q, R = np.divmod(U, np.int64(K))
+    out = np.empty(N, dtype=np.float64)
+    phi_r = np.float64(PHI) ** (np.arange(2 * K, dtype=np.float64) / K)
+    for n in range(N):
+        coeffs = {}
+        for t in range(T):
+            s = int(s_terms[t, n])
+            if s == 0:
+                continue
+            q, r = int(Q[t, n]), int(R[t, n])
+            Fq, _ = _fib_pair(q)
+            Fqm1, _ = _fib_pair(q - 1)
+            coeffs[r] = coeffs.get(r, 0) + s * Fqm1
+            coeffs[r + K] = coeffs.get(r + K, 0) + s * Fq
+        if not coeffs:
+            out[n] = 0.0
+            continue
+        # drop exact-cancelled entries; all-zero -> true zero (no 0/0)
+        coeffs = {i: c for i, c in coeffs.items() if c != 0}
+        if not coeffs:
+            out[n] = 0.0
+            continue
+        # max-normalized float solve (display boundary only)
+        idx = np.array(list(coeffs.keys()))
+        mag = np.array([abs(coeffs[i]) * float(phi_r[i]) for i in idx])
+        m = mag.max()
+        total = sum((coeffs[i] / m) * float(phi_r[i]) for i in idx)
+        out[n] = total * m
+    return out
+
+
+def taylor_add(s1, e1, s2, e2, terms: int = 6):
+    """Table-free log-space addition (phi_geist tradition, ported to K=512).
+
+    Same-sign: e_out = max + round(C*K), C = log_phi(1+PHI^(-d/K)) via
+    `terms`-term Taylor series. Different-sign mirrors with log_phi|1-x|.
+    Float correction at runtime -> NOT integer-only; math comparison only.
+    """
+    if s1 == s2:
+        if e1 >= e2:
+            d = (e1 - e2) / K
+            x = PHI ** (-d)
+            c = sum(((-1) ** (k + 1)) * (x ** k) / k for k in range(1, terms + 1)) / LN_PHI
+            return s1, e1 + int(round(c * K))
+        d = (e2 - e1) / K
+        x = PHI ** (-d)
+        c = sum(((-1) ** (k + 1)) * (x ** k) / k for k in range(1, terms + 1)) / LN_PHI
+        return s2, e2 + int(round(c * K))
+    if e1 == e2:
+        return 1, 0
+    if e1 > e2:
+        d = (e1 - e2) / K
+        x = PHI ** (-d)
+        c = math.log(1 - x) / LN_PHI if x < 1 else float('-inf')
+        return (s1, e1) if c == float('-inf') else (s1, e1 + int(round(c * K)))
+    d = (e2 - e1) / K
+    x = PHI ** (-d)
+    c = math.log(1 - x) / LN_PHI if x < 1 else float('-inf')
+    return (s2, e2) if c == float('-inf') else (s2, e1 + int(round(c * K)))
+
+
+def taylor_dot_terms(fs, fe, ws, we, terms: int = 6):
+    """Sequential Taylor-add dot product (math comparison; float corrections).
+
+    Products are exact integer exponent-adds (ps = fs*ws, pe = fe+we-BIAS);
+    only the ADDITION correction uses the Taylor series. N outputs.
+    fs/fe: (N, C) int; ws/we: (C,) int. Returns (s, e) (N,).
+    """
+    S = np.asanyarray(fs, dtype=np.int64)
+    E = np.asanyarray(fe, dtype=np.int64)
+    N, C = S.shape
+    out_s = np.ones(N, dtype=np.int8)
+    out_e = np.zeros(N, dtype=np.int32)
+    first = np.ones(N, dtype=bool)
+    for c in range(C):
+        ps = (S[:, c] * ws[c]).astype(np.int8)
+        pe = np.clip(E[:, c] + we[c] - BIAS, 0, MAX_EXP).astype(np.int32)
+        for n in range(N):
+            if first[n]:
+                out_s[n], out_e[n] = ps[n], pe[n]
+                first[n] = False
+            else:
+                out_s[n], out_e[n] = taylor_add(
+                    int(out_s[n]), int(out_e[n]), int(ps[n]), int(pe[n]), terms)
+    return out_s, out_e
+
+
+def shootout(feat=None, n_px: int = 1500, seed: int = 23):
+    """Four accumulation traditions, one harness. Prints table. Returns dict.
+
+    Single-add sweep across delta bands (vs float64 exact) plus full
+    32-wide head dots (vs float head). All methods accumulate the SAME
+    phi-centered terms (centering via LUT-add); only accumulation differs.
+    Timings are CPython loops except tree/fixed (numpy) — scaling, not
+    ranking, is the point (see geo_jit/c_port for fast paths).
+    """
+    import time
+    rng = np.random.default_rng(seed)
+    add_lut, sub_lut = build_add_lut(), build_sub_lut()
+
+    print("  single-add rel err vs float64 exact (mean / max per delta band):")
+    print(f"  {'band':>12} {'lut':>16} {'taylor2':>16} {'taylor6':>16} {'fib':>16}")
+    bands = [(0, 0), (1, 3), (4, 16), (17, 64), (65, 256), (257, 1024), (2049, 8192)]
+    for lo, hi in bands:
+        d = rng.integers(lo, hi + 1, size=400)
+        e1 = rng.integers(28000, 38000, size=400)
+        e2 = e1 - d
+        s1 = rng.choice([-1, 1], size=400).astype(np.int8)
+        s2 = np.where(rng.random(400) < 0.5, s1, -s1).astype(np.int8)
+        exact = s1 * PHI ** ((e1 - BIAS) / K) + s2 * PHI ** ((e2 - BIAS) / K)
+
+        def rel(got):
+            return np.abs((got - exact) / np.where(exact == 0, 1, exact))
+
+        outs = {}
+        gl, ge = np.empty(400, dtype=np.int8), np.empty(400, dtype=np.int32)
+        for i in range(400):
+            gl[i], ge[i] = phi_add(int(s1[i]), int(e1[i]), int(s2[i]), int(e2[i]),
+                                   add_lut, sub_lut)[:2]
+        outs['lut'] = gl * PHI ** ((ge - BIAS) / K)
+        for t, key in ((2, 'taylor2'), (6, 'taylor6')):
+            tl, te = np.empty(400, dtype=np.int8), np.empty(400, dtype=np.int32)
+            for i in range(400):
+                tl[i], te[i] = taylor_add(int(s1[i]), int(e1[i]),
+                                          int(s2[i]), int(e2[i]), t)
+            outs[key] = tl * PHI ** ((te - BIAS) / K)
+        fb = fib_dot_terms(np.stack([s1, s2]), np.stack([e1, e2]))
+        outs['fib'] = fb
+        row = []
+        for k in ('lut', 'taylor2', 'taylor6', 'fib'):
+            r = rel(outs[k])
+            row.append(f"{r.mean():.2e}/{r.max():.2e}")
+        print(f"  {lo}-{hi:>9} {row[0]:>16} {row[1]:>16} {row[2]:>16} {row[3]:>16}")
+
+    print("  full 32-wide head dots vs float head:")
+    if feat is None:
+        feat = (rng.standard_normal((n_px, 32)) * 4).astype(np.float64)
+    from pathlib import Path as _P
+    head = IntegerPhiHead(_P(__file__).parent / 'weights' / 'phi_weights_compact.bin')
+    ref = head.float_predict(feat)
+    fs, fe = IntegerPhiHead.encode_features(feat)
+    res = {}
+    t0 = time.perf_counter()
+    got_tree = head.int_predict(fs, fe)
+    res['tree'] = (time.perf_counter() - t0, got_tree)
+    # centered terms shared by fib/taylor/fixed comparisons
+    cs = np.empty_like(fs)
+    ce = np.empty_like(fe)
+    for i in range(feat.shape[0]):
+        for c in range(32):
+            cs[i, c], ce[i, c] = phi_add(int(fs[i, c]), int(fe[i, c]),
+                                         int(-head.m_s[c]), int(head.m_e[c]),
+                                         add_lut, sub_lut)
+    prod_s = (cs.astype(np.int16) * head.w_s[None, :].astype(np.int16)).astype(np.int8)
+    prod_e = np.clip(ce.astype(np.int32) + head.w_e[None, :].astype(np.int32) - BIAS,
+                     0, MAX_EXP).astype(np.int32)
+    t0 = time.perf_counter()
+    acc = fib_dot_terms(prod_s.T, prod_e.T)
+    t_fib = time.perf_counter() - t0
+    # + target mean via integer add, then decode
+    tm = np.empty_like(acc)
+    for n in range(feat.shape[0]):
+        ss, ee = phi_add(1, 0, 1, 0, add_lut, sub_lut)  # zero
+        ss, ee = _fib_plus_tm(acc[n], head, add_lut, sub_lut)
+        tm[n] = ss * PHI ** ((ee - BIAS) / K) if ee != 0 else 0.0
+    res['fib'] = (t_fib, tm)
+    t0 = time.perf_counter()
+    # NB: target-mean shift omitted here (correlation is shift-invariant).
+    tsl, tel = taylor_dot_terms(cs, ce, head.w_s, head.w_e)
+    t_tay = time.perf_counter() - t0
+    tay = np.array([tsl[i] * PHI ** ((tel[i] - BIAS) / K) for i in range(feat.shape[0])])
+    res['taylor6'] = (t_tay, tay)
+    for key, (dt, got) in res.items():
+        c = float(np.corrcoef(ref.astype(np.float64), got.astype(np.float64))[0, 1])
+        print(f"  [{key:>7}] corr={c:.6f}  {dt:.2f}s/{feat.shape[0]}px")
+    return res
+
+
+def _fib_plus_tm(acc_val, head, add_lut, sub_lut):
+    """Add scalar float accumulator value + target mean in phi domain (display)."""
+    s = 1 if acc_val >= 0 else -1
+    e = int(round(K * math.log(abs(acc_val) + 1e-15) / LN_PHI)) + BIAS
+    return phi_add(s, np.clip(e, 0, MAX_EXP), int(head.tm_s), int(head.tm_e),
+                   add_lut, sub_lut)
+
+
 def neck_conv_parity(geo, add_lut, sub_lut, size: int = 238):
     """Integer neck convs vs float: reassemble 1x1 -> 3x3 -> fusion 3x3+ReLU.
 
@@ -1227,6 +1474,8 @@ def main():
     ok_layer = transformer_layer_parity()
     print("OVERALL:", "PASS" if (corr > 0.999 and ok_neck and all(results)
                                  and ok_layer) else "FAIL")
+    print("accumulation shootout (tree/fixed/fib/taylor, informational)...")
+    shootout(feat=feat[:1500])
 
 
 if __name__ == '__main__':
