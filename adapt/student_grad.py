@@ -26,7 +26,7 @@ STUDENT_LAYERS = (0, 1, 2)
 MAPS = ("q.weight", "k.weight", "v.weight", "proj.weight",
         "mlp1.weight", "mlp2.weight")
 LABEL_CACHE = ADAPT / 'runs' / 'grad_labels.npz'
-BEST = ADAPT / 'runs' / 'student_grad_best.pt'
+BEST = ADAPT / 'runs' / f'student_grad_best_r{RANK}.pt'
 
 
 class StudentBackbone:
