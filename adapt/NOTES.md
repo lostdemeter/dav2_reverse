@@ -1132,6 +1132,18 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   (held-out ~= 0.976 after 100 epochs) = narrow-early dead even
   for gradients -> student keeps full early width.
 
+## 2026-09-22 — OUTCOME: gradients close half the gap (0.976->0.9928)
+
+- 100 epochs, best ep29 0.99276 (4-5/23 pass), oscillating plateau
+  after — no late breakthrough. Prediction missed (wanted >=0.998).
+  Train/held-out gap NOT the story (loss fell steadily; held-out
+  tracked it, oscillating) — capacity/schedule is.
+- Diagnosis order (one variable at a time): rank first (E@96 flat
+  0.99 vs F@192 0.999 single-layer says rank matters enormously at
+  depth). Rerun RANK=192 same protocol: >=0.998 -> capacity story,
+  continue up; ~0.993 -> not capacity -> schedule/data/unfreeze
+  next. Narrow-early NOT retired (untried capacity gradient).
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?

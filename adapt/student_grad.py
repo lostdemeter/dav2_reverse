@@ -21,7 +21,7 @@ sys.path.insert(0, str(ADAPT))
 import numpy as np
 import copy
 
-RANK = 128
+RANK = int(__import__('os').environ.get('STUDENT_RANK', '128'))
 STUDENT_LAYERS = (0, 1, 2)
 MAPS = ("q.weight", "k.weight", "v.weight", "proj.weight",
         "mlp1.weight", "mlp2.weight")
