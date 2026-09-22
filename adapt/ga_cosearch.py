@@ -299,7 +299,9 @@ def main():
     runs.mkdir(exist_ok=True)
     hist = [{"geno": {**v[5], **v[6]}, "correct": v[2][0], "bytes": v[2][1]}
             for v in cache.values()]
-    (runs / f'cohistory_{args.mode}_{args.mate}_{args.seed}.json').write_text(
+    # arm-stamped (2026-09-22 fix): hand/random arms sharing seeds
+    # used to overwrite each other's history files.
+    (runs / f'cohistory_{args.mode}_{args.mate}_{args.groups}_{args.seed}.json').write_text(
         json.dumps(hist, indent=0, default=str))
     (runs / f'cosearch_{args.mode}_{args.mate}_{args.groups}_{args.seed}.json'
      ).write_text(json.dumps(

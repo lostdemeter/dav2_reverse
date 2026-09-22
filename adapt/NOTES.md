@@ -953,3 +953,45 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Thread 6 closed at 12/16 with the corners documented. Chasing two
   never-observed strata with exotic sources is negative-value work;
   the matrix already discriminates all live questions.
+
+## 2026-09-22 — PRE-REGISTERED: pooled group learning (269 histories)
+
+- The blob verdict was about n=59. Pool now: big hand run (59) +
+  random-arm seeds 11-15 (210), all 35-case denominator (--real 8).
+  Excluded: older 27-case files (different denominators bias the
+  ranking) and the overwritten hand arm (lost to filename collision
+  — runs now write arm-stamped files; stated). Random-arm bias noted:
+  broader key-combo coverage, arguably good for MI.
+- Predictions: resolves non-blob structure (largest group <=6 keys);
+  top-MI pairs reproduce block_gains×taps / readout×taps (>=2 of top-3
+  match the n=59 run's pairs). If blob again at n=269, the proposer
+  is retired at scale too — the failure is algorithmic (chaining),
+  not sample size.
+
+## 2026-09-22 — OUTCOME: blob at 269, proposer retired (content moot anyway)
+
+- Same 8-key blob + accum/dmax/exp_span singletons. MI sharpened
+  (0.33 vs 0.23) but clustering still chains. Pair reproduction 1/3
+  (only block_gains×head survives). Both predictions fail.
+- Reading, stated carefully: chaining-vs-genuine-nonfactorizability
+  is undecidable from inside — BUT the permutation race makes it
+  moot (hand ≈ random means content doesn't matter either way). The
+  coherent story: nothing factorizes (matches irreducibility
+  everywhere) → all groupings equivalent → only move GRANULARITY
+  matters (multi-key vs scattered, the one standing style result).
+  The singletons are the real output: accum/dmax/exp_span vary
+  independently — exactly the levers that ever won anything.
+- Proposer RETIRED (usefulness, not correctness). Fix applied:
+  race files now arm-stamped (no more hand/random overwrites).
+
+## 2026-09-22 — PRE-REGISTERED: scene-conditional tap study
+
+- Tap-2 went tie -> splits-on-6-strata. New question: WHEN does it
+  hold? All single-tap moves (3->2, 6->5/7, 9->8/10, 11/12 neighbors)
+  x all 79 scenes, per-stratum hold/fail at 0.999, seed pipeline.
+- Predictions: tap 3->2 holds on synthetics + low-edge strata,
+  fails on high-edge real strata (E1T1L0V1 et al) — i.e. the split
+  tracks edge/texture load, not random; deeper taps (9/12 neighbors)
+  fail broadly (matches prior tap search). If 3->2 holds everywhere
+  including E1T1L0V1, the strata splits came from elsewhere (direct
+  fit? noise?) — stated alternative.
