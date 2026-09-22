@@ -170,8 +170,11 @@ def main():
         elites = [pop[i] for i in order[:2]]
         children = []
         grp = cur_groups
-        cross = (lambda rng_, x, y: S.style_crossover_joint(rng_, x, y, grp)
-                 if args.mode == "style" else S.crossover_joint_flat)
+        if args.mode == "style":
+            def cross(rng_, x, y):
+                return S.style_crossover_joint(rng_, x, y, grp)
+        else:
+            cross = S.crossover_joint_flat
         while len(elites) + len(children) < args.pop:
             a, b = rng.sample(range(len(pop)), 2)
             ai = a if order.index(a) <= order.index(b) else b

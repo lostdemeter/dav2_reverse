@@ -333,15 +333,26 @@ def corr(a, b):
 
     The core serializes diagnostics as strict JSON (no NaN/inf), so a
     degenerate prediction must be a clean failure, not an exception.
+
+    METROLOGY RULE (2026-09-21 correction): a is always the PREDICTION,
+    b the REFERENCE. On shape mismatch the prediction is DOWNSAMPLED to
+    reference resolution. NEVER upsample ground truth: bilinear-upsample
+    blur mismatches sharp predictions exactly at edges, which fabricated
+    an entire dose-response curve (edge count vs corr) and a phantom
+    stratum cliff before this fix. All maps here are square.
     """
     import numpy as np
-    a = np.asanyarray(a, dtype=np.float64).flatten()
-    b = np.asanyarray(b, dtype=np.float64).flatten()
+    a = np.asanyarray(a, dtype=np.float64)
+    b = np.asanyarray(b, dtype=np.float64)
     if a.shape != b.shape:
         import cv2
-        n = int(np.sqrt(b.shape[0]))
-        b = cv2.resize(b.reshape(n, n), (int(np.sqrt(a.shape[0])),) * 2,
-                       interpolation=cv2.INTER_LINEAR).flatten()
+        assert a.ndim == 2 and b.ndim == 2, "corr expects 2D maps"
+        hb, wb = b.shape[-2], b.shape[-1]
+        # downsample prediction to reference grid (or, defensively, to
+        # whichever grid is smaller) — ground truth is never upsampled
+        a = cv2.resize(a, (wb, hb), interpolation=cv2.INTER_LINEAR)
+    a = a.flatten()
+    b = b.flatten()
     if np.std(a) < 1e-12 or np.std(b) < 1e-12:
         return -1.0
     c = float(np.corrcoef(a, b)[0, 1])

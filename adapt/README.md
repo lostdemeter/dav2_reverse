@@ -112,8 +112,11 @@ adapter; they open once, post-seal, for the report.
 Scene-stratified rule coverage: 4 oracle-free stats median-split into
 16 strata; candidate panel of 5; per-stratum foundry Assessments;
 obligations for empty/split cells; saturation read off the table.
-First run: 9/16 strata hit, 7 SUPPORTED, 18/20 held-out prediction
-PASS — both misses localized to cliff stratum E1T1L0V1. See NOTES.
+Held-out prediction 20/20. The E1T1L0V1 "cliff" was a resampling
+artifact (corr() upsized references; fixed — see NOTES correction);
+the stratum stands reframed as most discriminating (direct splits
+there and only there). Dose-response claims now require the
+injected-signal audit pattern.
 
 ## Accumulation shootout (`python geo_int.py`, informational section)
 

@@ -562,3 +562,42 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   + zero obligations), not a claim. And the matrix is the portfolio
   key the earlier discussion asked for: entries addressable by the
   strata they cover, holes drawn as obligations.
+
+## 2026-09-21 — CORRECTION: the cliff was a resampling artifact (major)
+
+- `depth_adapter.corr()` UPSAMPLED the 168px reference to 518px before
+  correlating. Bilinear-upsample blur mismatches sharp predictions
+  exactly at edges — more edges, more mismatch. This fabricated:
+  (a) the entire B-family dose-response (0.99997->0.99850 becomes ALL
+  >=0.99994 under the fixed protocol), and (b) the E1T1L0V1 cliff
+  (seed 6/7 + audit miss becomes seed 7/7 + 20/20 prediction).
+  Both retracted. The active-identification experiment still earned
+  its keep: the injected-signal dose-response is what EXPOSED the
+  metrology bug (a real mechanism would not vanish under correct
+  resampling). Fixed rule: downsample predictions to reference
+  resolution; NEVER upsample ground truth.
+- Verdict audit (buggy -> fixed protocol), re-ran everything cheap:
+  STANDS: drops catastrophic (e0/6 both), analytic/wrong-readout
+  catastrophes, block-gain collapses + depth gradient (L0 0.67,
+  L11 0.994), drop ranking shape (L11 best 0.941, mid worst),
+  head near-miss ranking (L1h0 now 0.99918, still 0 full passes),
+  dmax1024 retention loss, exp8 genuine 14/14 promotion, co-search
+  race outcome (style 2/3, re-ran), ALL width/integer results
+  (separate clean protocol, verified identical code path).
+  STRENGTHENED: tap-2 tie is now a genuine 6/6 tie.
+  CORRECTED: direct genuinely fails 2 scenes (was masked when the
+  buggy protocol also failed seed there).
+  FIXED (code): flat-mode lambda-precedence crash (crashed loudly, no
+  silent corruption; prior flat runs predate the bug — verified via
+  run JSONs).
+- E1T1L0V1 reframed, not deleted: not a cliff (seed holds 7/7) but the
+  most DISCRIMINATING stratum (direct splits 2/7 there and only
+  there). Strata prediction now 20/20.
+- LIBRARY, third verse: metrology bugs wear the best disguises —
+  this one produced a smooth dose-response curve, the shape most
+  likely to be trusted. Defenses, all now in place: never upsample
+  ground truth (rule, not advice); distrust any finding whose effect
+  size tracks a preprocessing parameter; injected-signal sweeps as
+  standard audit for dose-response claims (the sweep that caught this
+  is now a reusable pattern: if the curve survives correct
+  resampling, it's mechanism; if not, it's measurement).
