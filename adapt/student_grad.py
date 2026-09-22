@@ -208,6 +208,8 @@ def main():
     ap.add_argument('--batch', type=int, default=4)
     ap.add_argument('--lr', type=float, default=5e-5)
     ap.add_argument('--gate-every', type=int, default=5)
+    ap.add_argument('--schedule', choices=('const', 'cosine'), default='const',
+                    help='LR schedule: constant or cosine annealing to 0')
     args = ap.parse_args()
 
     import torch
@@ -292,6 +294,8 @@ def main():
               f"({sum(p.numel() for p in student.late_parameters())} params)",
               flush=True)
     opt = torch.optim.Adam(groups)
+    sched = (torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
+             if args.schedule == 'cosine' else None)
     best, best_state = -1.0, None
 
     from geo_neck import GeometricNeck
@@ -347,6 +351,8 @@ def main():
             opt.step()
             tot += float(loss)
         print(f"ep {ep}: loss={tot / (n / args.batch):.5f}", flush=True)
+        if sched is not None:
+            sched.step()
         if (ep + 1) % args.gate_every == 0:
             m = gate(f"ep{ep}")
             if m > best:
