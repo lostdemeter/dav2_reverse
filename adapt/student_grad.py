@@ -200,14 +200,21 @@ def main():
     hold_idx = set(range(0, npool, 12))
     fit_pairs = [p for i, p in enumerate(all_pool) if i not in hold_idx]
     hold_pairs = [all_pool[i] for i in sorted(hold_idx)]
-    print(f"train {len(fit_pairs)}, held-out reals {len(hold_pairs)}",
-          flush=True)
+    # targeted coverage (failmap 2026-09-22): fit is 100% real, student
+    # fails synthetics it never saw. Mix exploration+retention synth
+    # into fit; gate+audit stay eval-only.
+    _fx = load_fixtures(include_audit=False)
+    for _role in ('exploration', 'retention'):
+        for _rgb, _ref, _cid in _fx[_role]:
+            fit_pairs.append((_rgb, _ref))
+    print(f"train {len(fit_pairs)} (incl. 9 synth), held-out reals "
+          f"{len(hold_pairs)}", flush=True)
 
-    # held-out: fixtures + audit + NEVER-FIT pool reals
+    # held-out: gate + audit (never fit) + NEVER-FIT pool reals.
+    # exploration/retention synth are IN fit now (failmap coverage fix).
     fx = load_fixtures(include_audit=False)
     fxa = load_fixtures(include_audit=True)['audit']
-    eval_scenes = ([(rgb, ref, cid) for role in ('exploration', 'gate')
-                    for rgb, ref, cid in fx[role][:3]] +
+    eval_scenes = ([(rgb, ref, cid) for rgb, ref, cid in fx['gate']] +
                    [(rgb, ref, cid) for rgb, ref, cid in fxa] +
                    [(rgb, ref, f"hold-{i}") for i, (rgb, ref) in
                     enumerate(hold_pairs)])

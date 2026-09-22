@@ -1171,6 +1171,22 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   diffuse, unfreeze-late (absorbability: OUR finding says late
   layers absorb tweaks) outranks schedule.
 
+## 2026-09-22 — Failure map: SYNTHETICS fail, reals hold (coverage, not capacity)
+
+- Best r128 by stratum: E1T1L0V1 0.9974, E1T1L1V1 0.9966 (reals
+  hold); E0T0L1V0 0.9847 uniform-mild; E0T0L0V0 0.9719 with
+  exploration-2 0.9489, exploration-4 0.9526, audit-1 0.9436.
+  Failures = SYNTHETIC scenes the fit never saw (fit is 100%
+  real COCO). Same scene-interaction signature as the linear
+  pilot's L11-synth 0.57 — teacher acts differ on synth, fitted
+  maps never learned them.
+- Fix (targeted, pre-registered): mix 9 synthetic scenes
+  (exploration-6 + retention-3) into fit; eval keeps gate-4 +
+  audit-4 + holdout-reals (never fit). Predictions: E0T0L0V0
+  rises >=0.99, overall >=0.996; audit-synth (never fit either
+  side) is the honest judge — if audit holds too, coverage was
+  the whole story.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
