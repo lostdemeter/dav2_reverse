@@ -1090,6 +1090,26 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   which would shift medians; stated) then one A-seq rerun decides:
   >=0.99 open, >=0.999 gate, flat fork.
 
+## 2026-09-22 — OUTCOME at 198 scenes: saturated 0.976 -> the fork
+
+- A-seq: 0.895 (10) -> 0.976 (30) -> 0.982 (48) -> 0.976 (198).
+  Saturated below 0.99 with 4x data past the knee. Per the
+  pre-registered read: closed-form layer-wise fitting is CLOSED
+  (compounding irreducible-by-fitting). F single-layer stable
+  ~0.999 (8-11/12); one narrowed layer absorbable, three are not.
+- Fork decided by reasoning (stated, no compute spent): end-to-end
+  DISCRETE search can't fix map values (RRR already optimal per
+  layer; search would rediscover F) — retired. GRADIENT descent on
+  a depth-graded narrow student, RRR-INITIALIZED: closed-form gives
+  the start, gradients fix the compounding. Few-shot designs,
+  gradients fit — each does what it can do.
+- Proposed pilot (needs go-ahead, bigger build): student backbone,
+  12 layers, early linears bottlenecked (L0-2 @96-192, rest full),
+  RRR init, Adam on teacher pseudo-labels (fit_pool 204 scenes,
+  SSI + gradient-matching per paper), gated same 12 scenes +
+  margins. If gradients can't close 0.976->0.999 with RRR start,
+  narrow-early is dead too and the student keeps full early width.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
