@@ -281,7 +281,7 @@ def main():
             for j in idx:
                 rgb = fit_pairs[j][0]
                 pvs.append(shared['preprocess'](rgb))
-            pv = torch.stack(pvs).to(device)
+            pv = torch.cat(pvs).to(device)  # preprocess gives [1,3,H,W] each
             tgt = Y[idx]
             fmaps, ph, pw = student.forward_backbone(pv)
             fused = _neck(fmaps)
