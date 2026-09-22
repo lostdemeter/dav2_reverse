@@ -138,9 +138,14 @@ def ssi_gm_loss(pred, target):
     B = pred.shape[0]
     p = pred.reshape(B, -1).double()
     t = target.reshape(B, -1).double()
-    A = torch.stack([p, torch.ones_like(p)], dim=-1)  # (B,N,2)
-    sol = torch.linalg.lstsq(A, t.unsqueeze(-1)).solution.squeeze(-1)
-    s, sh = sol[:, 0].float(), sol[:, 1].float()
+    # 2x2 normal equations (lstsq driver materializes full U on 268k rows
+    # -> TBs; closed form is exact for 2 unknowns).
+    n = p.shape[1]
+    sp, st = p.sum(1), t.sum(1)
+    spp, spt = (p * p).sum(1), (p * t).sum(1)
+    den = (n * spp - sp * sp).clamp_min(1e-12)
+    s = ((n * spt - sp * st) / den).float()
+    sh = ((st - s.double() * sp) / n).float()
     P4 = pred.unsqueeze(1)
     T4 = target.unsqueeze(1)
     aligned = s.view(B, 1, 1, 1) * P4 + sh.view(B, 1, 1, 1)
