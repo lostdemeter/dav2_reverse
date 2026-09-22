@@ -3,6 +3,23 @@
 Working log for the experimental branch. Kept because several findings
 generalize to adaptation_foundry as a library (flagged LIBRARY below).
 
+## 2026-09-21 — stability round: everything stands (research paused)
+
+- Runs/*.json backed up before touching anything; restored after.
+- Battery, all green with recorded numbers: smoke PASS; C suite ALL
+  PASS (all zero-mismatch lines identical); float parity 0.999995 /
+  0.999998; integer suite OVERALL PASS incl. layer0 0.999996 and the
+  full shootout table unchanged; emitter tree 0/64 EMIT ALL PASS;
+  seed width-eval determinism IDENTICAL across runs.
+- Learned artifacts: webcam int-vs-float 0.99956 today (vs 0.99982
+  last session — different frames, scene variation, expected, far
+  above every bar); graduation machinery spot-check passes pre-flight
+  e7/7 g4/4 r3/3 with absolutes visible; incumbent config intact.
+- Standing position, user's call recorded: DAV2's human training is
+  unrecoverable in full and we claim nothing about swaths we can't
+  see. What we claim: understanding + deterministic repeatability,
+  both re-verified above. No new research builds this turn.
+
 ## 2026-09-21 — group race: learned ties hand (loop closed, no coronation)
 
 - Raced LEARNED_GROUPS vs JOINT_GROUPS as crossover units, 4 seeds each,
