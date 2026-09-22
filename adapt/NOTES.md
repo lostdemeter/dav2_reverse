@@ -1009,6 +1009,75 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   (0.988 < bar, depth-parity unmeasured) — a direction with
   numbers. Proposed next: depth-graded student pilot, depth-gated.
 
+## 2026-09-22 — PRE-REGISTERED: depth-graded student pilot (real meter)
+
+- Assemble RUNNING student backbones: RRR-fit rank-r maps (dense
+  reconstruct — tests function, not speed) for early layers,
+  teacher-exact late. Configs: A=L0-2@96, B=L0-3@96, C=L0-5@192,
+  D=L0-2@96+L3-5@192. Full pipeline (student backbone + neck +
+  head) vs HF-oracle refs, 12 scenes (6 fixture + 6 real), bar
+  0.999 + margin reading. Float maps first (upper bound);
+  phi-encode after only if something holds. Bytes: factor pairs
+  reported, not claimed.
+- Predictions: A closest (depth >=0.995, below bar — block 0.988
+  compounds); D degrades further; NONE >=0.999 (near-miss, not
+  win). A hold (>=0.999) on any config = first genuine compression
+  lead -> gate + emitter path + phi-encode.
+
+## 2026-09-22 — OUTCOME: single-layer holds, compounding kills
+
+- F (L0-only @192): mean 0.99914, 11/12 pass (only miss:
+  exploration-2 synthetic 0.9930; all 6 reals 0.9998-1.0). E
+  (L0-only @96): 0.9926, 3/12. Multi-layer A-D: 0.89-0.97.
+  Prediction direction held (no full win) but A-number missed
+  (0.962 vs hoped >=0.995).
+- Located precisely: single-layer capacity SUFFICES (F ~holds);
+  independent greedy fits DON'T COMPOSE (A << F). The killer is
+  compounding, and it prescribes its own fix: SEQUENTIAL RRR —
+  fit each layer against teacher targets GIVEN STUDENT (perturbed)
+  inputs from already-fitted prefix layers. Still closed-form,
+  still few-shot.
+
+## 2026-09-22 — PRE-REGISTERED: sequential RRR (config A chain)
+
+- Fit L0 maps (teacher inputs) -> student L0 outs (numpy exact
+  forms) -> L1 covariances on (student-outs -> teacher L1 targets)
+  -> fit L1 -> student L1 outs -> L2 likewise. Depth-gate A-seq vs
+  A-indep 0.962 on same 12 scenes.
+- Predictions: A-seq >=0.99 (compounding substantially absorbed;
+  residual gap from rank capacity itself); per-layer student-input
+  drift shrinks vs indep (measured: mean |student-in - teacher-in|
+  per layer). If A-seq <= A-indep, sequential adaptation is void
+  and compounding is irreducible-by-fitting -> end-to-end search
+  or gradients, stated.
+
+## 2026-09-22 — OUTCOME: sequential WORSE (0.895 < 0.962); overfit suspects
+
+- A-seq 0.89462 vs A-indep 0.96230. Drift grows per layer
+  (0.0048/0.0086/0.0110) yet depth gets worse — adapting to
+  drifted inputs backfires. Prime suspect: OVERFIT — 13.7k
+  correlated tokens vs ~37k map params at rank-96 (+near-zero
+  ridge): the fits memorize train perturbations, break on test.
+  Same ratio afflicts indep fits, but teacher-inputs are cleaner.
+- Decisive follow-up running: N_FIT=30 diverse reals. A-seq-30 >>
+  A-seq-10 -> data-starved, keep pushing closed-form. A-seq-30 ~=
+  A-seq-10 -> structural: compounding irreducible-by-fitting ->
+  the fork (end-to-end discrete search vs gradients). No conclusion
+  until the 30-image run lands.
+
+## 2026-09-22 — OUTCOME: data-starved, not structural (A-seq 0.895->0.976)
+
+- 30 diverse reals: A-seq 0.97610 (from 0.89462, +0.08), now ABOVE
+  A-indep (0.955-0.962). Drift unchanged (capacity-structural) but
+  better maps handle it. Single-layer F stable ~0.999 (9-11/12);
+  E (L0@96) flat 0.990-0.993 (capacity-bound, not data-bound).
+- Closed-form sequential fitting WORKS — it was starved, not void.
+  Trajectory favors more scenes. Running N_FIT=100 (still few-shot
+  vs millions). Pre-registered read: A-seq-100 >=0.99 (gains
+  continue, below bar) keeps the program open; >=0.999 goes to the
+  gate; saturation <0.99 closes closed-form (diminishing) -> the
+  fork.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
