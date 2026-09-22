@@ -500,3 +500,43 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   (built for efficiency, still absent here). Binary verdicts keep
   aliasing "slightly worse" with "garbage"; the post-hoc corr
   measurements above are doing the work the scorecards can't.
+
+## 2026-09-21 — stratification: weight-direct roles (pre-registered predictions)
+
+- `adapt/stratify.py` characterizes all 12 layers from baked weights
+  alone (phi-level stats, isotropy, rank ratios, layer-scales; position
+  excluded; attention span omitted as stated — needs activations).
+- k=3 agglomerative roles: {L0}, {L1..L10}, {L11} — contiguous,
+  degenerate-looking but real: L0 extreme scaling (attn_iso 6.25),
+  L11 extreme drive (ls1 0.335, ls2 -0.579 vs ~±0.09 elsewhere). No
+  rotation-like layers anywhere (all attn_iso 2.6+).
+- TWO rival predictions, both fixed BEFORE gate probes run:
+  T1 (weight-character): fragile-first
+  [11,10,9,8,6,7,5,4,2,3,1,0] — scaling+drive = fragile.
+  T2 (positional fan-out, suggested BY exploration gain data — stated):
+  fragile-first [0..11] — early layers amplify downstream.
+  NOTE: T1 already conflicts with exploration patterns (L0 collapse);
+  the gate probe arbitrates. If T1 loses, the scaling_score theory is
+  falsified as written and must be revised, not tuned.
+
+## 2026-09-21 — stratification probe: theories weak, scene interaction dominates
+
+- Gate-scene probes (roles fixed beforehand): gain T1 rho=+0.449
+  (p=0.028, marginal), T2 rho=-0.447 (mirror); drop T1/T2 both ns.
+  Verdict: WEAK at best. A p=0.028 on n=24 with rank ties is noise
+  wearing a lab coat — reported, not celebrated.
+- The finding that matters is not the rhos but the RAW comparison:
+  L0-attn gain scores 0.47 on exploration scenes vs 0.89 on gate
+  scenes. Same block, same intervention, 0.4 corr apart. Gain
+  fragility is block×scene INTERACTION, so any block-only ranking
+  (T1 or T2) has a low ceiling by construction. The heterogeneity
+  thesis survives — strengthened, even — but at a deeper level than
+  "different layers do different jobs": layer behavior differs PER
+  INPUT. Roles from weights alone cannot capture that; they describe
+  capacity, not conduct.
+- Standing: role map {L0},{L1..L10},{L11} kept as weight-direct
+  description (L0 scaling-extreme, L11 drive-extreme, both contiguous
+  and real); scaling_score retired as a fragility theory (falsified as
+  written — L11 predicted most fragile, measured among most robust).
+  Next probe design must be scene-stratified, or it measures scenes
+  and calls them layers.
