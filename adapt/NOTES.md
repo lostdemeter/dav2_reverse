@@ -906,6 +906,36 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   layer-local so the test is pure. If it HOLDS (>=0.999), it is the
   biggest structural win in the program and goes to the gate.
 
+## 2026-09-22 — OUTCOME: shared-Q collapses (0.36); opinions on the rest
+
+- Shared layer5-Q across 12 layers: mean 0.36 (0/6, one negative).
+  Overlap ≠ substitutability — closed as predicted. Sharing axis
+  fully retired (MLP offline 0.18, attention probe 0.36).
+- Stacking: NO MATERIAL — opinion formed without running. Only
+  codebook ever near-missed (0.9988); every other axis is dead, not
+  marginal. There is nothing to stack WITH. Stacking two failures
+  is not an experiment.
+- Margin gates: NEEDED, evidenced (0.9988 and L1h0 both sit in the
+  binary blind spot). Implementation is an upstream follow-up to the
+  filed baseline-gate PR (same story: gates must resolve ties), not
+  a local hack. Opinion recorded; code waits for the PR thread.
+- Neck topology (biggest untouched surface): NEXT BIG COMPUTE, design
+  below. Distillation: NEW PROGRAM — design is a discussion, not a
+  probe (see chat 2026-09-22).
+
+## 2026-09-22 — PRE-REGISTERED: neck topology search
+
+- DSL v4: fusion depth (2 vs 3 residual blocks per stage? — NO:
+  start with what exists) — honest scope: reassemble channel widths
+  (48/96/192/384 -> narrowed variants), fusion stage skips (drop 1 of
+  4 fusion stages), readout is covered. Moves: per-stage channel
+  halving + single-stage drop, EfficiencyRule with honest neck bytes
+  (2.7M params, measured NECK_PARAMS).
+- Predictions: stage drops fail (pyramid roles load-bearing, like
+  taps); channel halving on the 384-stage fails, on 48-stage ties
+  (capacity-graded, mirroring tap depth-grading). If the 48-stage
+  halves AND holds, it is a real neck win and goes to the emitter.
+
 ## 2026-09-22 — OUTCOME: random >= hand; style thesis takes the hit
 
 - Permutation race (--real 8, pop10/gens12, 5 seeds/arm): hand 4/5
