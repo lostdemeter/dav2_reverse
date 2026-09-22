@@ -62,6 +62,7 @@ def main():
     cfgs = {"seed": list(SEED_CONFIG["taps"])}
     cfgs.update(MOVES)
     table = {}
+    records = {}  # cfg -> list[(cid, stratum, corr)] (per-case numbers rule)
     for name, taps in cfgs.items():
         cfg = copy.deepcopy(dict(SEED_CONFIG))
         cfg["taps"] = taps
@@ -69,7 +70,12 @@ def main():
             pred = run_pipeline(shared, cfg, [rgb])[0]
             c = corr(pred, ref)
             table.setdefault(st, {}).setdefault(name, []).append(c >= 0.999)
+            records.setdefault(name, []).append((cid, st, round(float(c), 6)))
         print(f"{name} {taps}: done", flush=True)
+    (ADAPT / 'runs' / 'tap_study.json').write_text(json.dumps(
+        {"taps": {n: t for n, t in cfgs.items()}, "records": records},
+        indent=0))
+    print("wrote adapt/runs/tap_study.json", flush=True)
 
     print("\nper-stratum hold fraction (seed vs moves):", flush=True)
     sts = sorted(table)

@@ -923,6 +923,67 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   below. Distillation: NEW PROGRAM — design is a discussion, not a
   probe (see chat 2026-09-22).
 
+## 2026-09-22 — Bars by hand: what they did and didn't decide
+
+- Asked directly (user): could hand-set bars have affected results?
+  Answer, split honestly. ROBUST (any sane bar decides the same):
+  drops (0.2-0.9), shared-Q (0.36), sparsity (0.28), rank (0.08),
+  dmax1024 (0.6), analytic/direct rejections. FRAGILE (bar position
+  is the verdict): codebook 0.9988 vs 0.999, L1h0 0.99918, tap2
+  split counts, per-layer-4096 3/6. The bar was ALSO set at the
+  seed's floor (0.99901), so all fragile verdicts are razor-thin by
+  construction — conservative (nothing undeserved promotes) but
+  brittle (millipoint noise decides ties).
+- Consequence: margin gates (direction 5) don't just add resolution —
+  they re-examine every fragile verdict. Guardrail, pre-stated:
+  margins calibrate from SEED variance, never tuned to flip a named
+  verdict; margins pre-register before outcomes are seen. Widening a
+  margin to manufacture a win = moving the bar = ruled out.
+- Order of work: margins first (they condition how neck verdicts are
+  read), neck second. Margin re-analysis needs per-case corrs —
+  tap_study printed fractions only, so it re-runs once WITH a JSON
+  record; every future probe records per-case numbers by default.
+
+## 2026-09-22 — PRE-REGISTERED: margin re-analysis + neck DSL v4
+
+- M1: tap_study rerun recording per-case corrs (79 scenes x 7 cfgs);
+  margin rule (per-case pass iff c >= seed_c - m, m from seed
+  variance: max seed shortfall across cases + epsilon) applied to
+  tap moves, L1h0-class near-misses, codebook probe means.
+  Predictions: tap0 holds-as-tie in MORE strata under margins (its
+  0.67-0.86 fractions sit millipoints under, not collapsed);
+  codebook 0.9983 stays a REGRESSION (gap 0.0017 >> any
+  seed-calibrated margin — margins add resolution, not wins);
+  tap3 collapse unchanged.
+
+## 2026-09-22 — OUTCOME M1: margins resolve tap0 as regression (both ways work)
+
+- Calibrated m=0.000274 (seed max-min range over 79 cases; NOTES
+  said "max shortfall + epsilon" ambiguously — the range formula in
+  margin.py is authoritative, same for all candidates, computed
+  blind. Clarification recorded, not edited.)
+- tap0 under margins: full ties in only 3 strata (E0T0L0V0/L1V0,
+  E0T1L0V0); 0.00-0.50 across E0T1L0V1, E1T0L1V0, E1T1Lx. The
+  "holds 6/12" binary read was bar-artifact: tap0 corrs sit above
+  0.999 but systematically >m short of seed. Prediction inverted
+  honestly: margins made a tie into a MEASURED REGRESSION.
+  Resolution cuts both ways — that is the point of the instrument.
+- codebook 0.9983: gap 0.00168 >> m, stays regression ✓. tap3: 0.00
+  everywhere ✓. L1h0-class: same re-read available (recorded
+  0.99918 vs seed floor — within a seed-calibrated margin? seed
+  range here is 0.000274 but that sweep ran on different scenes;
+  margins calibrate per-evaluation, never imported — stated rule).
+- Bar-effect question CLOSED quantitatively: hand bars decided the
+  fragile verdicts (tap0 "tie" was bar-artifact); robust verdicts
+  untouched. MarginRule module (adapt/margin.py) ships as the
+  portable form; upstream follow-up to the baseline-gate PR.
+- M2: MarginRule domain-side (adapt/margin.py; EfficiencyRule
+  composes, core untouched) for the neck search.
+- N1: neck DSL v4 (per-stage channel halving 48/96/192/384 +
+  single fusion-stage drop; honest NECK_PARAMS bytes) under
+  EfficiencyRule+MarginRule. Predictions stand (stage drops fail;
+  48-stage halves tie, 384-stage fails).
+
 ## 2026-09-22 — PRE-REGISTERED: neck topology search
 
 - DSL v4: fusion depth (2 vs 3 residual blocks per stage? — NO:
