@@ -601,3 +601,18 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   standard audit for dose-response claims (the sweep that caught this
   is now a reusable pattern: if the curve survives correct
   resampling, it's mechanism; if not, it's measurement).
+
+## 2026-09-21 — sweep re-run: flat everywhere, hunt over
+
+- Full 29-stimulus re-run under the fixed protocol: B-family
+  0.99993–0.99998 (no trend), A-family ≥0.99994, C-family ≥0.99995.
+  Two isolated dips (A-f12-a0.15 0.99930, A-f16-a0.15 0.99948),
+  non-monotonic with neighbors — grating-frequency curiosities, noted
+  as such, claimed as nothing. No milder edge effect hiding under the
+  artifact; the model handles edges and texture to ≥0.9993 across all
+  tested ranges.
+- The instrument is now calibrated: flat-on-healthy is the expected
+  signature, and future sweeps compare against this baseline instead
+  of against zero. E1T1L0V1 keeps exactly one honest distinction:
+  most discriminating stratum (direct splits 2/7 there, nowhere
+  else) — not a cliff, a lens.
