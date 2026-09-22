@@ -540,3 +540,25 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   written — L11 predicted most fragile, measured among most robust).
   Next probe design must be scene-stratified, or it measures scenes
   and calls them layers.
+
+## 2026-09-21 — coverage matrix: strata predict, misses localized
+
+- `adapt/strata.py`: 4 oracle-free stats (edge/texture/lumspread/
+  vertical) median-split into 16 strata; 25 scenes hit 9; candidate
+  panel of 5 (seed, tap2, direct, analytic, drop23); per-stratum
+  foundry Assessments (decided cells CHECKED, splits UNCHECKED so the
+  machinery itself emits 'unverified' obligations); 13 empty strata
+  get 'missing' obligations. NOT saturated — stated by the table.
+- 7 strata resolve SUPPORTED, 2 UNSUPPORTED with the obligations to
+  prove it. Analytic fails 0/N and drop23 fails 0/N in EVERY stratum
+  (search rejections, independently reproduced); tap2 == seed in all
+  9 strata (the tie, reproduced a third way); direct holds everywhere.
+- Held-out prediction 18/20 PASS (bar 15/20). Both misses are audit-2
+  in E1T1L0V1 for seed/tap2 — predicted hold from a 6/7 majority,
+  actual fail. The misses have an address: E1T1L0V1 is the cliff
+  stratum where strong candidates crack. Next evidence goes there by
+  name, not by vibes.
+- LIBRARY: saturation is now a readable property (SUPPORTED everywhere
+  + zero obligations), not a claim. And the matrix is the portfolio
+  key the earlier discussion asked for: entries addressable by the
+  strata they cover, holes drawn as obligations.

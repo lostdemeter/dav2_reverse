@@ -107,6 +107,14 @@ Fixtures (`adapt/fixtures/`, gitignored): 6 exploration + 4 gate scenes,
 168px with HF reference depths. Audit fixtures are never passed to the
 adapter; they open once, post-seal, for the report.
 
+## Coverage matrix (`python adapt/strata.py`)
+
+Scene-stratified rule coverage: 4 oracle-free stats median-split into
+16 strata; candidate panel of 5; per-stratum foundry Assessments;
+obligations for empty/split cells; saturation read off the table.
+First run: 9/16 strata hit, 7 SUPPORTED, 18/20 held-out prediction
+PASS — both misses localized to cliff stratum E1T1L0V1. See NOTES.
+
 ## Accumulation shootout (`python geo_int.py`, informational section)
 
 Four traditions accumulate the same dots on our K=512 weights:
