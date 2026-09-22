@@ -68,13 +68,16 @@ def main():
     bb, pre = shared['backbone'], shared['preprocess']
 
     zr = np.load(ADAPT / 'fixtures' / 'strata_real.npz', allow_pickle=True)
-    fit_rgb = [zr['rgb'][i].astype(np.float32) / 255.0 for i in range(N_FIT)]
+    navail = len(zr['rgb'])
+    nfit = min(N_FIT, navail - 6)
+    print(f"fit scenes: {nfit} (asked {N_FIT}, have {navail})", flush=True)
+    fit_rgb = [zr['rgb'][i].astype(np.float32) / 255.0 for i in range(nfit)]
     fx = load_fixtures(include_audit=False)
     scenes = ([(rgb, ref, cid) for role in ('exploration', 'gate')
                for rgb, ref, cid in fx[role][:3]] +
               [(zr['rgb'][i].astype(np.float32) / 255.0,
                 zr['ref'][i].astype(np.float64), f"eval-{i}")
-               for i in range(N_FIT, N_FIT + 6)])
+               for i in range(nfit, nfit + 6)])
     print(f"{len(scenes)} eval scenes", flush=True)
 
     covs = {li: {} for li in LAYERS}
