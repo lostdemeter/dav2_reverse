@@ -1187,6 +1187,24 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   side) is the honest judge — if audit holds too, coverage was
   the whole story.
 
+## 2026-09-22 — OUTCOME mixed run: 0.99594, coverage helped, not whole story
+
+- 567 train (+9 synth), 54-scene eval, 100 epochs: best ep89
+  0.99594 (10/54 pass) vs 0.99386 before. E0T0L0V0 0.9719->0.9870
+  (exploration-2 0.949->0.971, exploration-4 0.953->0.994);
+  E0T0L1V0 0.9847->0.9908; reals 0.9975+. Direction as predicted,
+  both bars MISSED (E0T0L0V0 <0.99; overall <0.996 by 6e-5).
+- Honest judge speaks: audit-1 (never fit either side) still
+  0.9682 — worst scene. Fitted synthetics learned, unfitted
+  synthetics lag. Coverage was real but NOT the whole story;
+  residual gap is capacity/absorption on low-edge gradient scenes.
+- Next (last untried lever before retiring narrow-early):
+  UNFREEZE-LATE — late layers at small LR absorb early-narrowing
+  errors (absorbability is OUR finding: late robust, early
+  fragile). Pre-registered: unfreeze L9-11 @1e-6 alongside
+  bottleneck training; >=0.998 continues, >=0.999 gates, flat
+  retires narrow-early (student keeps full early width).
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
