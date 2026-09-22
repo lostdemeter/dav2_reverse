@@ -862,3 +862,23 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   landscape; hand vs LEARNED2 discriminates (fresh groups differ on
   more than dmax). If LEARNED2 == hand structurally, the contrast is
   thin again — report it, race anyway, ties are ties.
+
+## 2026-09-22 — AMENDMENT: proposer blobs at n=59; permutation race instead
+
+- Big hand-style run (pop12/gens16, 35-case bar): PASS, first hit
+  gen 11/49 evals; winner = intact arch + exp8 (same cross-DSL form
+  as the old arena, now holding 8 reals). 9 holders under seed bytes.
+- learn_groups on the 59-history pool: one 8-key BLOB + 3 singletons
+  (MI ~0.2 chains everything). The evidence guard PASSES it
+  (n_top=29>=20, MI>=0.05) — the guard checks quantity, not shape.
+  LIBRARY: self-modifying mechanisms need a shape check too
+  (no-blob: refuse if largest group >60% of keys). Racing blob-vs-hand
+  is meaningless (blob crossover ~= flat mixing).
+- New contrast (cleaner thesis test): hand JOINT_GROUPS vs RANDOM
+  4-partitions (permutation test). If hand beats random partitions,
+  group structure bites — the thesis holds even though the proposer
+  can't resolve it at n~60. Prediction: hand wins on first-hit evals
+  (its bundles — tables-together, structure-together — are real
+  co-adaptation); random partitions scramble them. 5 seeds/arm,
+  pop10/gens12, --real 8. If hand ties random, the style thesis
+  takes the hit it deserves.

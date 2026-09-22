@@ -58,9 +58,12 @@ def main():
     ap.add_argument('--mate', choices=("random", "phase"), default="random",
                     help="second-parent choice: uniform random mating vs "
                          "phase-neighborhood mating (geometric proposer)")
-    ap.add_argument('--groups', choices=("hand", "learned"), default="hand",
+    ap.add_argument('--groups', choices=("hand", "learned", "random"), default="hand",
                     help="crossover unit decomposition: hand-drawn JOINT_GROUPS "
-                         "vs machine-proposed LEARNED_GROUPS (style mode only)")
+                          "vs machine-proposed LEARNED_GROUPS (style mode only) "
+                          "vs deterministic random 4-partition (--groupseed)")
+    ap.add_argument('--groupseed', type=int, default=7,
+                    help="seed for the random partition (--groups random)")
     ap.add_argument('--regroup', type=int, default=0, metavar="K",
                     help="self-dissolving structures: every K gens, re-derive "
                          "groups from measured co-success via learn_groups and "
@@ -168,7 +171,11 @@ def main():
         visited.add(S.joint_identifier(_cfg))
     cur_groups = ([tuple(g) for g in S.LEARNED_GROUPS]
                   if args.groups == "learned"
-                  else [tuple(g) for g in S.JOINT_GROUPS])
+                  else ([tuple(g) for g in S.random_partition(args.groupseed)]
+                        if args.groups == "random"
+                        else [tuple(g) for g in S.JOINT_GROUPS]))
+    if args.groups == "random":
+        print(f"random partition (seed {args.groupseed}): {cur_groups}", flush=True)
     regroup_events = []
     first_hit, prev_front_hash = None, None
     t0 = time.perf_counter()

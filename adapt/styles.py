@@ -177,6 +177,23 @@ JOINT_GROUPS = (("readout", "taps"),                     # structure
                 ("res_scales", "tap_gains"),             # interface gains
                 ("head", "block_gains", "dropped", "accum"),  # compute
                 ("frac_cap", "exp_span", "dmax"))         # tables
+
+
+def random_partition(seed, n_groups=4):
+    """Deterministic random partition of all 11 joint keys (permutation
+    test for the style thesis). Balanced-ish sizes, recorded by seed."""
+    import random
+    rng = random.Random(seed)
+    keys = ["readout", "res_scales", "head", "taps", "tap_gains",
+            "block_gains", "dropped",
+            "frac_cap", "exp_span", "dmax", "accum"]
+    rng.shuffle(keys)
+    sizes = [3, 3, 3, 2]
+    out, i = [], 0
+    for s in sizes:
+        out.append(tuple(sorted(keys[i:i + s])))
+        i += s
+    return tuple(out)
 ARCH_KEYS = ("readout", "res_scales", "head", "taps", "tap_gains",
              "block_gains", "dropped")
 WIDTH_KEYS = ("frac_cap", "exp_span", "dmax", "accum")
