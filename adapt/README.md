@@ -85,7 +85,18 @@ Geometric proposer (`adapt/styles.py`: `phase_mate_select`,
 `learn_groups`): mating by phase position; regrouping from co-success
 MI with converged keys reported separately. On 107 histories it
 re-derived 3/4 hand groups and correctly refused to group constant
-dmax. Next receipt: race learned groups vs hand groups.
+dmax. Learned-vs-hand group race: 2/4 tie each (loop closed
+mechanically, no coronation).
+
+Self-dissolving structures (`--regroup K`): groups re-derived from
+measured co-success every K gens, adopted on difference with MI
+evidence logged. `adapt/bloom.py` (resonant bloom, Echion addressing
+math) observes visited space in constant memory: fn=0 throughout,
+est tracks exact. Race 3 seeds: static 2/3 hits, regroup 1/3 —
+dissolution on ~11-sample histories churns good structure (gen-2
+regroups shatter into singletons). Lesson: dissolution needs a
+minimum-evidence guard; strong pairs ([readout,taps],
+[res_scales,tap_gains]) survive most events regardless.
 
 Fixtures (`adapt/fixtures/`, gitignored): 6 exploration + 4 gate scenes,
 3 retention anchors (gradient/checker/disc), 4 sealed audit scenes, all

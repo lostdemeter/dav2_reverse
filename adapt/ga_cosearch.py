@@ -61,6 +61,10 @@ def main():
     ap.add_argument('--groups', choices=("hand", "learned"), default="hand",
                     help="crossover unit decomposition: hand-drawn JOINT_GROUPS "
                          "vs machine-proposed LEARNED_GROUPS (style mode only)")
+    ap.add_argument('--regroup', type=int, default=0, metavar="K",
+                    help="self-dissolving structures: every K gens, re-derive "
+                         "groups from measured co-success via learn_groups and "
+                         "adopt them if they differ (0=off, fixed groups)")
     args = ap.parse_args()
 
     import torch
@@ -121,6 +125,14 @@ def main():
     # ASSEMBLE the win from here; random starts in this space never hold
     # both bars at once (measured: 0 holders across 6 random-start runs).
     pop = [seed] + [S.random_joint(rng) for _ in range(args.pop - 1)]
+    from bloom import ResonantBloom
+    visited = ResonantBloom(n_hashes=5, n_bits=2**16)
+    for _cfg in pop:
+        visited.add(S.joint_identifier(_cfg))
+    cur_groups = ([tuple(g) for g in S.LEARNED_GROUPS]
+                  if args.groups == "learned"
+                  else [tuple(g) for g in S.JOINT_GROUPS])
+    regroup_events = []
     first_hit, prev_front_hash = None, None
     t0 = time.perf_counter()
     for gen in range(args.gens):
@@ -140,15 +152,19 @@ def main():
                   for i in range(len(pop)))
         if hit and first_hit is None:
             first_hit = (gen, len(cache))
+        # Bloom observer reads BEFORE this gen's children are added below,
+        # so est tracks evaluated space; fn must stay 0 (observer proof).
+        fn = sum(1 for k in cache if not visited.check(k))
         print(f"gen {gen}: evals={len(cache)} front={len(front)} "
               f"fronthash={fsha[:8]}:{stable} zeta={zmean:.0f} "
+              f"bloom_est={visited.estimated_count():.0f} fn={fn} "
               f"best={scores[best][0]}/{total_cases} "
               f"bytes={scores[best][1]}", flush=True)
         order = sorted(range(len(pop)),
                        key=lambda i: (-scores[i][0], scores[i][1]))
         elites = [pop[i] for i in order[:2]]
         children = []
-        grp = S.LEARNED_GROUPS if args.groups == "learned" else None
+        grp = cur_groups
         cross = (lambda rng_, x, y: S.style_crossover_joint(rng_, x, y, grp)
                  if args.mode == "style" else S.crossover_joint_flat)
         while len(elites) + len(children) < args.pop:
@@ -164,7 +180,24 @@ def main():
             if rng.random() < args.mutprob:
                 child = S.mutate_joint(rng, child)
             children.append(child)
+            visited.add(S.joint_identifier(child))
         pop = elites + children
+        # Self-dissolving structures: re-derive groups from measured
+        # co-success and adopt on difference, with the evidence logged.
+        if args.regroup and (gen + 1) % args.regroup == 0:
+            hist = [({**v[5], **v[6]}, v[2][0], v[2][1]) for v in cache.values()]
+            prop = S.learn_groups(hist)
+            new_groups = [tuple(g) for g in prop["groups"]]
+            if {frozenset(g) for g in new_groups} != {frozenset(g) for g in cur_groups}:
+                regroup_events.append(
+                    {"gen": gen, "from": [list(g) for g in cur_groups],
+                     "to": [list(g) for g in new_groups],
+                     "mi": prop["top_mi_pairs"], "n_top": prop["n_top"]})
+                cur_groups = new_groups
+                print(f"gen {gen}: REGROUP "
+                      f"{regroup_events[-1]['from']} -> "
+                      f"{regroup_events[-1]['to']} "
+                      f"(MI {prop['top_mi_pairs'][:2]})", flush=True)
 
     dt = time.perf_counter() - t0
     results = [evaluate(g) for g in pop]
@@ -214,6 +247,7 @@ def main():
     (runs / f'cosearch_{args.mode}_{args.mate}_{args.groups}_{args.seed}.json'
      ).write_text(json.dumps(
         {"mode": args.mode, "mate": args.mate, "groups": args.groups,
+         "regroup_every": args.regroup, "regroup_events": regroup_events,
          "winners": bool(winners),
          "first_hit": first_hit, "best": audit_cfg,
          "unique_evals": len(cache), "seconds": dt}, indent=1, default=str))

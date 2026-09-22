@@ -3,6 +3,32 @@
 Working log for the experimental branch. Kept because several findings
 generalize to adaptation_foundry as a library (flagged LIBRARY below).
 
+## 2026-09-21 — self-dissolving groups: mechanism works, verdict negative
+
+- Built: `--regroup K` re-derives groups from measured co-success via
+  `learn_groups` every K gens and adopts on difference (events logged
+  with MI evidence); bloom observer alongside (fn=0 throughout, est
+  tracks exact — instrument proven, selection untouched).
+- Race, static vs regroup3, 3 seeds: STATIC 2/3 hits (13, 16 evals),
+  REGROUP 1/3 (17 evals). Dissolution hurt or did nothing.
+- Why, read off the events: gen-2 regroups fire on ~11 histories and
+  shatter hand groups into singletons + one blob (MI over a dozen
+  samples is noise-following). Strong pairs ([readout,taps],
+  [res_scales,tap_gains]) DO survive most dissolutions — the mechanism
+  partially works — but adopting full regroups on thin evidence churns
+  good structure away. Seed 2 is the exhibit: static hits at 13,
+  regrouped misses entirely.
+- Design lesson (the actual finding): self-dissolving structures need
+  a MINIMUM-EVIDENCE guard — min histories, or an MI significance
+  margin over the incumbent grouping, before adopting. Dissolution
+  without an evidence threshold is just noise with a log line.
+  Follow-up: guard + rerun; the events format already carries what's
+  needed to gate on.
+- LIBRARY: same lesson as the bar incident, one level up. Every
+  self-modifying mechanism needs a "when am I allowed to believe my
+  own statistics" threshold, or autonomy degrades into churn. Put the
+  threshold in the mechanism, not in a human watching the logs.
+
 ## 2026-09-21 — stability round: everything stands (research paused)
 
 - Runs/*.json backed up before touching anything; restored after.

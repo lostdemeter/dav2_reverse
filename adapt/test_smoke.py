@@ -223,5 +223,23 @@ try:
     check(False, "pre-flight catches nondeterminism")
 except BaselineFailed as e:
     check("nondeterministic" in str(e), "pre-flight catches nondeterminism")
+
+from bloom import ResonantBloom
+bb = ResonantBloom(n_hashes=3, n_bits=2**12)
+tokens = [f"geno-{i:04d}" for i in range(200)]
+for t in tokens:
+    bb.add(t)
+misses = sum(1 for t in tokens if not bb.check(t))
+check(misses == 0, "bloom: zero false negatives over 200 inserts")
+unseen = [f"other-{i:04d}" for i in range(2000)]
+fp = sum(1 for t in unseen if bb.check(t)) / len(unseen)
+theory = bb.expected_fp(200)
+check(abs(fp - theory) < 0.05, f"bloom FP measured {fp:.3f} vs theory {theory:.3f}")
+bb.save("/tmp/opencode/bloom_smoke.bin")
+bb2 = ResonantBloom.load("/tmp/opencode/bloom_smoke.bin")
+check(all(bb2.check(t) for t in tokens) and bb2.count == 200,
+      "bloom save/load round-trips")
+est = bb2.estimated_count()
+check(abs(est - 200) / 200 < 0.25, f"bloom cardinality estimate {est:.0f} ~= 200")
 print("SMOKE:", "PASS" if fails == 0 else "FAIL")
 raise SystemExit(1 if fails else 0)
