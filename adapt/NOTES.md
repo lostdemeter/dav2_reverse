@@ -1205,6 +1205,21 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   bottleneck training; >=0.998 continues, >=0.999 gates, flat
   retires narrow-early (student keeps full early width).
 
+## 2026-09-22 — OUTCOME unfreeze: 0.99502, absorbability-fix fails
+
+- L9-11 @1e-6 (+5.3M params), same protocol: best ep69 0.99502
+  (7/54), BELOW frozen 0.99594, more late oscillation. Late layers
+  do NOT soak up early-narrowing errors at this LR — absorbability
+  (robustness to scaling) ≠ correctability (fixing others'
+  errors). Third inversion in the program: robustness, linearity,
+  and correctability are three different axes.
+- Narrow-early @128 ceiling stands ~0.996 (four interventions:
+  data +0.002, synth-mix +0.002, rank192 -0.003, unfreeze -0.001).
+  Untried: cosine schedule, rank-64. Both cheap; neither
+  conceptually favored (no finding points at them — stated).
+  Decision point: spend two more runs, or accept 0.996 and move
+  the program to full-early-width / phi-encode-best.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
