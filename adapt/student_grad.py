@@ -112,8 +112,11 @@ def build_labels(shared, fit_pairs, force=False):
     import torch
     if LABEL_CACHE.exists() and not force:
         z = np.load(LABEL_CACHE, allow_pickle=False)
-        print(f"labels cached: {len(z['depth'])} scenes", flush=True)
-        return z['depth']
+        if len(z['depth']) == len(fit_pairs):
+            print(f"labels cached: {len(z['depth'])} scenes", flush=True)
+            return z['depth']
+        print(f"label cache stale ({len(z['depth'])} vs {len(fit_pairs)}), "
+              f"rebuilding...", flush=True)
     from geo_depth import GeometricDepthAnythingV2
     device = shared['device']
     geo = GeometricDepthAnythingV2(device=device)
