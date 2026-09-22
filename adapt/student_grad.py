@@ -23,10 +23,18 @@ import copy
 
 RANK = int(__import__('os').environ.get('STUDENT_RANK', '128'))
 STUDENT_LAYERS = (0, 1, 2)
+# Late layers unfrozen at small LR (absorbability lever). Env override
+# for sweeps without flag plumbing: STUDENT_UNFREEZE="9,10,11".
+LATE_LAYERS = tuple(int(x) for x in
+                    __import__('os').environ.get('STUDENT_UNFREEZE', '').split(',')
+                    if x.strip() != '')
+LATE_LR = float(__import__('os').environ.get('STUDENT_LATE_LR', '1e-6'))
 MAPS = ("q.weight", "k.weight", "v.weight", "proj.weight",
         "mlp1.weight", "mlp2.weight")
 LABEL_CACHE = ADAPT / 'runs' / 'grad_labels.npz'
-BEST = ADAPT / 'runs' / f'student_grad_best_r{RANK}.pt'
+BEST = (ADAPT / 'runs' /
+        f'student_grad_best_r{RANK}'
+        f'{"_ul" + "-".join(map(str, LATE_LAYERS)) if LATE_LAYERS else ""}.pt')
 
 
 class StudentBackbone:
@@ -54,9 +62,26 @@ class StudentBackbone:
                 W = teacher._w[f'layer{li}.{m}']
                 do, di = W.shape
                 B.copy_(torch.randn(do, RANK, device=self.device) * 0.01)
+        # Late full maps (absorbability lever): cloned teacher tensors
+        # as Parameters, trained at LATE_LR. Empty = frozen (legacy).
+        self.late = {}
+        with torch.no_grad():
+            for li in LATE_LAYERS:
+                for m in MAPS:
+                    W = teacher._w[f'layer{li}.{m}'].detach().clone()
+                    bkey = f'layer{li}.{m.replace(".weight", ".bias")}'
+                    b = (teacher._w[bkey].detach().clone()
+                         if bkey in teacher._w else None)
+                    Wp = torch.nn.Parameter(W)
+                    bp = torch.nn.Parameter(b) if b is not None else None
+                    self.late[(li, m)] = (Wp, bp)
 
     def parameters(self):
         return [p for tup in self.factors.values() for p in tup]
+
+    def late_parameters(self):
+        return [p for tup in self.late.values() for p in tup
+                if p is not None]
 
     def rrr_init(self, covs):
         """Init factors from RRR solutions: M=USV' -> A=(US).T, B=V'.T."""
@@ -94,10 +119,18 @@ class StudentBackbone:
                 A, B, b = self.factors[(int(m.group(1)),
                                         m.group(2) + '.weight')]
                 return B @ A
+            if m and int(m.group(1)) in LATE_LAYERS:
+                return self.late[(int(m.group(1)),
+                                  m.group(2) + '.weight')][0]
             m = re.match(r'layer(\d+)\.(q|k|v|proj|mlp1|mlp2)\.bias', name)
             if m and int(m.group(1)) in STUDENT_LAYERS:
                 return self.factors[(int(m.group(1)),
                                      m.group(2) + '.weight')][2]
+            if m and int(m.group(1)) in LATE_LAYERS:
+                late_b = self.late[(int(m.group(1)),
+                                    m.group(2) + '.weight')][1]
+                if late_b is not None:
+                    return late_b
             return orig_g(name)
 
         teacher._g = _g
@@ -252,7 +285,13 @@ def main():
           flush=True)
 
     labels = build_labels(shared, fit_pairs)
-    opt = torch.optim.Adam(student.parameters(), lr=args.lr)
+    groups = [{"params": student.parameters(), "lr": args.lr}]
+    if student.late_parameters():
+        groups.append({"params": student.late_parameters(), "lr": LATE_LR})
+        print(f"unfreeze-late {list(LATE_LAYERS)} @lr={LATE_LR} "
+              f"({sum(p.numel() for p in student.late_parameters())} params)",
+              flush=True)
+    opt = torch.optim.Adam(groups)
     best, best_state = -1.0, None
 
     from geo_neck import GeometricNeck
@@ -314,8 +353,13 @@ def main():
                 best = m
                 best_state = {k: tuple(p.detach().cpu().clone() for p in tup)
                               for k, tup in student.factors.items()}
-                torch.save({"factors": best_state, "mean_corr": best,
-                            "rank": RANK, "layers": STUDENT_LAYERS}, BEST)
+                late_state = {k: tuple(p.detach().cpu().clone() for p in tup
+                                       if p is not None)
+                              for k, tup in student.late.items()}
+                torch.save({"factors": best_state, "late": late_state,
+                            "mean_corr": best, "rank": RANK,
+                            "layers": STUDENT_LAYERS,
+                            "late_layers": LATE_LAYERS}, BEST)
                 print(f"  best saved: {best:.5f} -> {BEST}", flush=True)
     print(f"GRAD: best held-out mean={best:.5f}")
 

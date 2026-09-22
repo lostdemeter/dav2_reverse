@@ -16,10 +16,24 @@ def main():
     import torch
     from run_search import load_shared, load_fixtures
     from depth_adapter import corr as _corr
-    from student_grad import StudentBackbone, STUDENT_LAYERS, RANK
     from geo_neck import GeometricNeck
     from depth_adapter import ScaledNeckMixin
 
+    import glob as _glob
+    _cands = sorted(_glob.glob(str(ADAPT / 'runs' / 'student_grad_best_r*.pt')),
+                    key=lambda p: Path(p).stat().st_mtime)
+    _ckpt_path = Path(_cands[-1])
+    # env must be set BEFORE importing student_grad (RANK/LATE read at import)
+    import re as _re
+    _m = _re.search(r'_r(\d+)', _ckpt_path.name)
+    if _m:
+        import os as _os
+        _os.environ['STUDENT_RANK'] = _m.group(1)
+    _m2 = _re.search(r'_ul([\d-]+)', _ckpt_path.name)
+    if _m2:
+        import os as _os
+        _os.environ['STUDENT_UNFREEZE'] = _m2.group(1).replace('-', ',')
+    from student_grad import StudentBackbone
     device = torch.device('cuda')
     shared = load_shared(device)
 
@@ -32,15 +46,24 @@ def main():
     neck.res_scales = [0, 0, 0, 0]
 
     student = StudentBackbone(shared['backbone'])
-    ckpt = torch.load(ADAPT / 'runs' / f'student_grad_best_r{RANK}.pt',
-                      map_location=device, weights_only=False)
-    print(f"checkpoint mean_corr={ckpt['mean_corr']:.5f}", flush=True)
+    ckpt = torch.load(_ckpt_path, map_location=device, weights_only=False)
+    print(f"checkpoint {_ckpt_path.name} mean_corr={ckpt['mean_corr']:.5f}",
+          flush=True)
     with torch.no_grad():
         for (li, m), tup in ckpt['factors'].items():
             A, B, b = student.factors[(li, m)]
             A.copy_(tup[0].to(device))
             B.copy_(tup[1].to(device))
             b.copy_(tup[2].to(device))
+        for (li, m), tup in ckpt.get('late', {}).items():
+            Wp, bp = student.late.get((li, m), (None, None))
+            if Wp is None:
+                print(f"  WARNING: ckpt late {(li, m)} not in student "
+                      f"(env STUDENT_UNFREEZE mismatch?)", flush=True)
+                continue
+            Wp.copy_(tup[0].to(device))
+            if bp is not None and tup[1] is not None:
+                bp.copy_(tup[1].to(device))
 
     fx = load_fixtures(include_audit=False)
     fxa = load_fixtures(include_audit=True)['audit']
