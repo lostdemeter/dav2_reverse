@@ -883,6 +883,29 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   pop10/gens12, --real 8. If hand ties random, the style thesis
   takes the hit it deserves.
 
+## 2026-09-22 — OUTCOME: tap sensitivity is depth-graded AND scene-graded
+
+- 6 tap moves x 79 scenes: tap3 (12->11) collapses 0.00 in ALL 12
+  strata (irreplaceable everywhere — matches prior search);
+  tap0 (3->2) holds 1.00 on 6 strata, degrades to 0.67-0.86 on
+  high-edge/texture strata (E1T1L0V1 0.76, E1T1L1V0 0.67) — partial,
+  not collapse. Mid taps intermediate (tap1_up hits 0.40 in
+  E1T0L1V0). Seed 1.00 everywhere.
+- Opinion formed: the tap question is closed AS A MAP (which layer
+  tolerates substitution under what scene load), not as a verdict.
+  Layer 12 = load-bearing everywhere; layer 3 = substitutable except
+  under edge load; the split tracks input statistics. No bar moved,
+  no win claimed — understanding claimed, with numbers.
+
+## 2026-09-22 — PRE-REGISTERED: attention-share probe (cheap close-out)
+
+- All 12 layers share layer5's q.weight (float buffers, same seed
+  pipeline, 6 probe scenes). Thesis: 0.33-0.38 subspace overlap
+  carries the Q function. Prediction: FAILS (<0.95 mean) — overlap
+  is real but far from substitutability; biases/norms stay
+  layer-local so the test is pure. If it HOLDS (>=0.999), it is the
+  biggest structural win in the program and goes to the gate.
+
 ## 2026-09-22 — OUTCOME: random >= hand; style thesis takes the hit
 
 - Permutation race (--real 8, pop10/gens12, 5 seeds/arm): hand 4/5

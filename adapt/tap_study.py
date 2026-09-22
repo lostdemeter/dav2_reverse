@@ -69,10 +69,7 @@ def main():
             pred = run_pipeline(shared, cfg, [rgb])[0]
             c = corr(pred, ref)
             table.setdefault(st, {}).setdefault(name, []).append(c >= 0.999)
-        line = " ".join(
-            f"{st}={sum(v)/len(v):.2f}" for st, v in sorted(table.items())
-            if name in v and len(v[name]) == sum(1 for s in strata if s == st))
-        print(f"{name} {taps}: {line}", flush=True)
+        print(f"{name} {taps}: done", flush=True)
 
     print("\nper-stratum hold fraction (seed vs moves):", flush=True)
     sts = sorted(table)
