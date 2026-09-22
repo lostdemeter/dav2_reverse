@@ -138,8 +138,7 @@ def ssi_gm_loss(pred, target):
     B = pred.shape[0]
     p = pred.reshape(B, -1).double()
     t = target.reshape(B, -1).double()
-    ones = torch.ones_like(p[:, :1])
-    A = torch.stack([p, ones.squeeze(1)], dim=-1)  # (B,N,2)
+    A = torch.stack([p, torch.ones_like(p)], dim=-1)  # (B,N,2)
     sol = torch.linalg.lstsq(A, t.unsqueeze(-1)).solution.squeeze(-1)
     s, sh = sol[:, 0].float(), sol[:, 1].float()
     aligned = s.view(B, 1, 1, 1) * pred + sh.view(B, 1, 1, 1)
