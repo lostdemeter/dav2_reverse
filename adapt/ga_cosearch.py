@@ -70,6 +70,10 @@ def main():
                          "any dissolution is adopted")
     ap.add_argument('--regroup-mi-floor', type=float, default=0.05,
                     help="evidence guard: minimum best-pair MI for adoption")
+    ap.add_argument('--real', type=int, default=8,
+                    help="real-scene panel: first N COCO scenes (+HF-oracle "
+                    "refs) counted as extra arch cases (default 8; 0=off, "
+                    "legacy synthetic-only arena)")
     args = ap.parse_args()
 
     import torch
@@ -86,25 +90,53 @@ def main():
     seed = joint_seed()
     seed_bytes = (_model_bytes(seed["arch"], None)
                   + W.table_bytes(seed["width"]))
-    total_cases = 13 + 14  # arch scenes + width scenes + probe
+    # Real-scene panel (thread-4 arena upgrade): COCO RGB + HF-oracle refs
+    # counted as extra arch cases. Synthetics agree with each other; reals
+    # (tap2 splits) make the bar bite. Loaded once, deterministic order.
+    import numpy as np
+    real_panel = []
+    if args.real > 0:
+        zr = np.load(ADAPT / 'fixtures' / 'strata_real.npz', allow_pickle=True)
+        rids = [str(x) for x in zr['ids']]
+        for i in range(min(args.real, len(zr['rgb']))):
+            real_panel.append((zr['rgb'][i].astype(np.float32) / 255.0,
+                               zr['ref'][i].astype(np.float64), rids[i]))
+        print(f"real panel: {len(real_panel)} COCO scenes", flush=True)
+    total_cases = 13 + len(real_panel) + 14  # arch scenes + reals + width scenes + probe
 
     cache = {}  # joint id -> (arch_meas, width_meas, score, fps, means, vec)
 
     def evaluate(geno):
         key = S.joint_identifier(geno)
         if key not in cache:
+            from depth_adapter import run_pipeline as _arch_run, corr as _arch_corr
             g = S.validate_joint(geno)
             aspec = TrialSpec("co-arch", dict(g["arch"]), "co-search arch")
             aart = arch_adapter.build(aspec)
             am = arch_adapter.evaluate(aart)
-            wm = width_adapter.evaluate({"config": dict(g["width"])})
             ac = sum(1 for r in ("exploration", "gate", "retention")
                      for c in getattr(am, r).cases if c.correct)
+            vec, means = [], []
+            for m in (am,):
+                for r in ("exploration", "gate", "retention"):
+                    card = getattr(m, r)
+                    vec.extend(1 if c.correct else 0 for c in card.cases)
+                    means.append(m.diagnostics[r]["mean_corr"])
+            # real panel: same config, same bar, counted alongside
+            rcorrs = []
+            for rgb, ref, cid in real_panel:
+                pred = _arch_run(shared_a, dict(g["arch"]), [rgb],
+                                 fit_explore=aart["direct"])[0]
+                c = _arch_corr(pred, ref)
+                rcorrs.append(c)
+                vec.append(1 if c >= 0.999 else 0)
+            ac += sum(1 for c in rcorrs if c >= 0.999)
+            means.append(float(np.mean(rcorrs)) if rcorrs else 1.0)
+            wm = width_adapter.evaluate({"config": dict(g["width"])})
             wc = sum(1 for r in ("exploration", "gate", "retention")
                      for c in getattr(wm, r).cases if c.correct)
             nbytes = _model_bytes(g["arch"], aart["direct"]) + W.table_bytes(g["width"])
-            vec, means = [], []
-            for m in (am, wm):
+            for m in (wm,):
                 for r in ("exploration", "gate", "retention"):
                     card = getattr(m, r)
                     vec.extend(1 if c.correct else 0 for c in card.cases)

@@ -841,3 +841,24 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   Experimenter( call sites exist there yet (contracts only) — so the
   "one-line migration" is vacuous today, just a vendor sync post-merge.
   Spec's migration paragraph corrected accordingly in the PR body.
+
+## 2026-09-22 — PRE-REGISTERED: bigger co-search arena (thread 4)
+
+- Diagnosis of the 2/4 tie: the old arena (synthetic-only, pop6/gens8,
+  4 seeds) couldn't discriminate — synthetics agree with each other,
+  and hand/learned differed only in dmax placement. Bigger arena =
+  harder cases + more power + fresh contrast, in that order:
+  A. Real-scene panel in the co-search arch evaluation (--real N,
+     default 8 COCO scenes w/ oracle refs; total_cases grows; seed
+     pre-flight recalibrated, or the race is noise).
+  B. One big hand-style run (pop12/gens16) -> history pool ->
+     learn_groups -> LEARNED2 (same-denominator histories only;
+     old synthetic-only histories NOT pooled — different
+     denominators would bias the ranking, stated).
+  C. Race hand vs LEARNED2 (5 seeds/arm, pop10/gens12), metric unique
+     evals to first target-hit.
+- Predictions: target-hit rate drops overall (reals harder — tap2
+  splits prove the bar bites); style-vs-flat gap widens on the harder
+  landscape; hand vs LEARNED2 discriminates (fresh groups differ on
+  more than dmax). If LEARNED2 == hand structurally, the contrast is
+  thin again — report it, race anyway, ties are ties.
