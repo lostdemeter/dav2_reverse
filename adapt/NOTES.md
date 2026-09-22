@@ -616,3 +616,57 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   of against zero. E1T1L0V1 keeps exactly one honest distinction:
   most discriminating stratum (direct splits 2/7 there, nowhere
   else) — not a cliff, a lens.
+
+## 2026-09-22 — PRE-REGISTERED: real-scene strata fill + weight-pathway program
+
+- Program decision (user): pursue ALL FOUR weight-pathway reductions
+  (codebook, low-rank, structured sparsity, cross-layer sharing),
+  codebook first (cheapest). Thread #1 (real scenes) runs first
+  because every reduction gate needs non-synthetic ground to stand on.
+- Method: ~40 COCO-train RGB (HF `detection-datasets/coco`, strided
+  sampling for diversity) + HF-oracle refs at 168px via
+  `harden_anchors.oracle_refs` (same protocol as build_fixtures).
+  Saved to `adapt/fixtures/strata_real.npz` (gitignored) with source
+  ids; `strata.py` loads it alongside `strata_extra.npz` (provenance
+  noted, vendored core untouched). Webcam `captures/*.png` NOT used
+  (combined figures, not RGB scenes — stated so nobody re-tries).
+- Predictions (fixed BEFORE fetching):
+  P1: pooled medians shift toward real stats (edge/texture up,
+    lumspread down, vertical toward positive) and coverage spreads
+    from 9 hit to >=12 hit strata.
+  P2: seed holds >=0.999 on the majority of real scenes but records
+    1-3 misses (reals harder than synthetics); any candidate splits
+    localize in newly filled strata.
+  P3: held-out audit prediction stays >=15/20 after recompute.
+  P4 (codebook, later probe): per-layer codebook to 2048 levels
+    holds parity with a byte win; flat global 512 fails retention.
+  If P1 fails (reals still collapse into 2 strata after recompute),
+  the median-split stat set is falsified as a stratifier and must be
+  revised, not patched with hand-picked bins.
+
+## 2026-09-22 — OUTCOME: real scenes land (P1 near-miss, P2 good-miss, P3 holds)
+
+- Fetched 40 COCO-train RGB (`adapt/fetch_real.py`, strided streaming)
+  + HF-oracle refs at 168px; `strata.py` now also loads
+  `strata_real.npz` (provenance inside; synthetic path untouched).
+- P1 (coverage >=12): MISS on the number, mechanism confirmed.
+  9 -> 11 hit strata; medians shifted exactly as predicted (edge
+  0.062->0.247, texture 0.024->0.215, vertical -0.44->-0.08).
+  Remaining empty 5: E0T0L1V1, E0T1L0V0, E0T1L1V0, E0T1L1V1,
+  E1T0L1V0. The stat set stratifies (reals spread, not collapse),
+  so no revision triggered — but the bar was missed, stated plainly.
+- P2 (1-3 seed misses on reals): MISS in the good direction. Seed
+  holds 65/65 across all 11 hit strata — the geometric replica
+  matches HF on real photos, not just synthetics. The news is in
+  tap2: synthetic-genuine tie now SPLITS on reals (E0T0L0V1 4/5,
+  E1T1L0V1 10/13, E1T1L1V0 1/2, E1T1L1V1 6/8 where seed holds).
+  The tap-2 watch-list item just got its margin evidence: tie on
+  synthetics, qualified on reals. Direct holds only in E0T0L1V0
+  (15/21, synthetic-dominated) and ~nowhere on reals.
+- P3 (held-out >=15/20): HOLDS, 19/20.
+- COUNTING BUG (conservative, no verdict change): the obligations
+  print counts kind=='missing' as "missing strata" (13) and
+  kind=='ambiguous' as splits (always 0 — the machinery emits
+  'unverified', never 'ambiguous'). Truly-empty strata are 5, split
+  cells 8. Saturation logic (needs n_empty==0) stays conservative;
+  fixing the labels + split count next.

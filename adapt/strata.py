@@ -33,6 +33,7 @@ import numpy as np
 
 STATS = ("edge", "texture", "lumspread", "vertical")
 EXTRA_PATH = ADAPT / 'fixtures' / 'strata_extra.npz'
+REAL_PATH = ADAPT / 'fixtures' / 'strata_real.npz'  # real RGB + HF-oracle refs (provenance inside)
 
 CANDIDATES = {
     "seed": {},
@@ -153,6 +154,15 @@ def main():
         for i, (rgb, ref) in enumerate(zip(fresh, refs)):
             scenes.append((rgb, ref.astype(np.float64), f"extra-{i}"))
         print(f"built {args.fresh} fresh scenes -> {EXTRA_PATH}", flush=True)
+    if REAL_PATH.exists():
+        zr = np.load(REAL_PATH, allow_pickle=True)
+        rids = [str(x) for x in zr['ids']] if 'ids' in zr else None
+        for i in range(len(zr['rgb'])):
+            cid = rids[i] if rids else f"real-{i}"
+            scenes.append((zr['rgb'][i].astype(np.float32) / 255.0,
+                           zr['ref'][i].astype(np.float64), cid))
+        print(f"loaded {len(zr['rgb'])} REAL scenes "
+              f"({zr['source'][0] if 'source' in zr else 'unknown source'})", flush=True)
 
     rgb_list = [s[0] for s in scenes]
     ref_list = [s[1] for s in scenes]
@@ -183,9 +193,12 @@ def main():
             assessments[st] = {"verdicts": {}, "resolution": {"status": "UNSUPPORTED"},
                                "obligations": [ob.as_dict()]}
             all_obs.append((st, ob.as_dict()))
-    n_split = sum(1 for st, o in all_obs if o["kind"] == "ambiguous")
-    n_empty = sum(1 for st, o in all_obs if o["kind"] == "missing")
-    print(f"obligations: {n_empty} missing strata, {n_split} ambiguous cells", flush=True)
+    n_split = sum(1 for st, o in all_obs if o["kind"] == "unverified")
+    n_empty = sum(1 for st, o in all_obs if o["kind"] == "missing"
+                  and st not in table)
+    print(f"obligations: {n_empty} empty strata, {n_split} split cells "
+          f"(+{sum(1 for st, o in all_obs if o['kind'] == 'missing' and st in table)} "
+          f"missing-kind from machinery)", flush=True)
     saturated = (n_empty == 0 and n_split == 0)
     print("SATURATED" if saturated else "NOT saturated", flush=True)
 
