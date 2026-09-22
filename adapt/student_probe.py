@@ -71,6 +71,7 @@ def main():
     zr_ids = set(str(x) for x in zr['ids'])
     # paired (rgb, ref) pool: fit_pool first, then strata_real
     pool_pairs = []
+    fp = ADAPT / 'fixtures' / 'fit_pool.npz'
     if fp.exists():
         zf = np.load(fp, allow_pickle=True)
         pool_pairs = [(zf['rgb'][i].astype(np.float32) / 255.0,
