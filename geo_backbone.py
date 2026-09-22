@@ -75,7 +75,7 @@ class GeometricDinov2Backbone(torch.nn.Module):
         return self._w[name]
 
     def forward_stages(self, pixel_values: torch.Tensor, taps=None, bgains=None,
-                         dropped=None, zero_heads=None):
+                         dropped=None, zero_heads=None, capture=None):
         """
         Args: pixel_values [B,3,H,W] float32.
               taps: 1-indexed layer numbers to tap (default OUT_STAGES).
@@ -87,6 +87,9 @@ class GeometricDinov2Backbone(torch.nn.Module):
                 layer i//2) to skip entirely (residual-only passthrough).
               zero_heads: set/list of (layer, head) pairs to ablate (head
                 contribution zeroed before the output projection).
+              capture: optional dict; filled with capture[li] =
+                (layer_in, layer_out) detached clones per layer (for
+                distillation pilots). None = exact legacy path.
         Returns: list of feature maps [B,384,H/14,W/14] in tap order,
                  plus patch_h, patch_w.
         """
@@ -134,6 +137,7 @@ class GeometricDinov2Backbone(torch.nn.Module):
         for li in range(LAYERS):
             p = f'layer{li}.'
             D = HIDDEN
+            layer_in = x if capture is not None else None
             # attention block (skippable: residual-only passthrough)
             if 2 * li in drop:
                 pass
@@ -171,6 +175,9 @@ class GeometricDinov2Backbone(torch.nn.Module):
                 x = x + h2 * ls2
             if (li + 1) in want:
                 stages[li + 1] = x
+            if capture is not None:
+                capture[li] = (layer_in.detach().clone(),
+                               x.detach().clone())
 
         # final layernorm (HF apply_layernorm=True)
         norm_w = self._w.get('final_norm.weight')

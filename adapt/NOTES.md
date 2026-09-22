@@ -919,9 +919,49 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   binary blind spot). Implementation is an upstream follow-up to the
   filed baseline-gate PR (same story: gates must resolve ties), not
   a local hack. Opinion recorded; code waits for the PR thread.
-- Neck topology (biggest untouched surface): NEXT BIG COMPUTE, design
-  below. Distillation: NEW PROGRAM — design is a discussion, not a
-  probe (see chat 2026-09-22).
+## 2026-09-22 — PRE-REGISTERED: linear-layer pilot (distillation crux)
+
+- Question: does a closed-form LINEAR reparameterization of a teacher
+  layer exist? Ridge 384->384 (same-width: capacity is not the
+  variable, linearity is) fit on teacher (input, output) token pairs
+  from real images, tested on held-out images. One image = 1370
+  pairs; fit on 10 reals, test on 5 reals + 3 synthetics. Layers
+  {0, 5, 11} (early/mid/late). CPU ridge after one GPU activation
+  pass. No gradient descent anywhere — that is the point.
+- Predictions: FAILS everywhere (<0.95 test corr) — GELU/softmax/
+  LayerNorm all nonlinear and spectra show full-rank use. Gradient
+  expected: L0 worst (sets coordinates), L11 least-bad (absorbable
+  tweaks, matches gain-search depth gradient). corr here is
+  activation-corr vs teacher, NOT depth corr — different meter,
+  stated.
+- Reading rules (fixed before running): >=0.999 anywhere -> rethink
+  everything (layers linear on-manifold, phi-from-birth trivial);
+  <0.95 everywhere -> greedy-linear is dead, the student must carry
+  real nonlinear capacity and "mathematical training" needs a
+  nonlinear solver (named open problem, not a refutation of
+  phi-from-birth — reparameterization can still exist, it just
+  isn't ridge-reachable).
+
+## 2026-09-22 — OUTCOME: greedy-linear dead; gradient inverted (interesting)
+
+- Ridge 384->384 (unregularized lstsq, generous to linearity):
+  L0 0.938 / L5 0.881 / L11 0.824 held-out real (synth worse:
+  0.93/0.80/0.57). FAIL everywhere as predicted — no layer is
+  linear on-manifold.
+- Gradient prediction INVERTED (stated): expected L0 worst, got L11
+  worst. Robustness-to-scaling (L11 most robust per gain search) is
+  NOT linearity — late layers are the most nonlinear (or most
+  input-dependent). Two different axes of "sensitivity," now
+  measured both ways. L11-synth 0.57 is the worst transfer in the
+  program's history — scene interaction strikes again.
+- Consequence, exactly as pre-registered: the student must carry
+  real nonlinear capacity; "mathematical training" needs a nonlinear
+  solver. Candidates: (a) conventional gradient descent on a small
+  student (paper's recipe, abandons few-shot); (b) greedy NONLINEAR
+  fit — same-width student layer with GELU/softmax trained by...?
+  (c) layer-wise LEAST-SQUARES on linear sub-blocks composed with
+  frozen teacher nonlinearities (hybrid: learn projections, keep
+  activations). (c) is untested and cheap — opinion: try it next.
 
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
