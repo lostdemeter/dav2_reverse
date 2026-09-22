@@ -1157,6 +1157,20 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   data story confirmed, continue scaling; ~0.993 again -> not
   data -> schedule (cosine) then rank-64 then unfreeze, in order.
 
+## 2026-09-22 — OUTCOME at ~590 scenes: 0.99386, data helped but saturated
+
+- Init 0.98314 (191) -> 0.99037 (590): data moved the CLOSED FORM
+  +0.007. Gradients added +0.0035 more (best 0.99386, 8/56 pass).
+  Pre-registered >=0.998 MISSED. Data was real but insufficient;
+  the "not data" branch is now live.
+- Against hasty ladder-climbing: the plateau (steady climb then
+  flat, not oscillatory) + init-already-0.990 says optimization is
+  NOT the limiter. Next diagnostic (cheap, no training): per-scene
+  failure map of the best checkpoint by stratum — if failures
+  concentrate, targeted data/strata beats blind scaling; if
+  diffuse, unfreeze-late (absorbability: OUR finding says late
+  layers absorb tweaks) outranks schedule.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
