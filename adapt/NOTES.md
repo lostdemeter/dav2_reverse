@@ -883,6 +883,23 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   pop10/gens12, --real 8. If hand ties random, the style thesis
   takes the hit it deserves.
 
+## 2026-09-22 — OUTCOME: random >= hand; style thesis takes the hit
+
+- Permutation race (--real 8, pop10/gens12, 5 seeds/arm): hand 4/5
+  (25, 27, 36, 37 evals + one miss) vs random-partition 5/5 (47, 28,
+  35, 24, 28; median 28 vs hand 31.5). Prediction falsified.
+- Read exactly: GROUP MOVES still beat flat mixing (prior 2/3 race
+  stands — the move class matters), but hand grouping content adds
+  nothing over arbitrary chunks (this race — the content doesn't).
+  Neither machine (blob at n=59) nor human resolves better-than-
+  random decompositions at this arena scale. Winners' form unchanged
+  (intact arch + exp8 assemblies — reachable by many decompositions,
+  which is WHY content doesn't discriminate).
+- Thread 4 DONE. The co-search machinery stands (harder arena runs
+  clean, 35-case bar, audits sealed); the style-content thesis does
+  not. LIBRARY: permutation-test your inductive bias — a mechanism
+  can win (groups move) while its content loses (which groups).
+
 ## 2026-09-22 — PRE-REGISTERED: substrate experiment (thread 5)
 
 - Question (lattice ≅ contracts?): do gate verdicts float free of
