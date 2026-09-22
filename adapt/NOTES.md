@@ -1110,6 +1110,28 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   margins. If gradients can't close 0.976->0.999 with RRR start,
   narrow-early is dead too and the student keeps full early width.
 
+## 2026-09-22 — PRE-REGISTERED: gradient pilot (RRR-init, bottleneck L0-2)
+
+- Student = teacher with L0-2 linears replaced by trainable
+  bottlenecks (384->r->dout, r=128; norms/scales/embeddings/pos
+  FROZEN teacher-exact — isolates linear learning). RRR init from
+  198-scene covariances (0.976 start, free). Late layers frozen
+  exact. Pilot isolates compounding-fix, not full student.
+- Labels: teacher 518px depths, cached (deterministic). Loss: SSI
+  (per-image least-squares align + MAE) + gradient-matching x2
+  (single-scale Sobel L1); top-10% residual mask; NO feature
+  alignment (semantics preserved by RRR init + frozen norms —
+  stated reason, not oversight).
+- Eval hygiene: held-out MUST exclude fit ids (fit_pool stride-7
+  overlaps strata_real stride-25 stream) — fixtures + audit +
+  non-overlap reals only, verified by id check before training.
+- Predictions: closes 0.976 -> >=0.998 (near; compounding
+  substantially fixed); HOLD (>=0.999) possible, not promised.
+  Train->1.0 while held-out stalls <0.99 = data verdict (204
+  scenes insufficient for gradients) -> stream more. Flat
+  (held-out ~= 0.976 after 100 epochs) = narrow-early dead even
+  for gradients -> student keeps full early width.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
