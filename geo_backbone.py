@@ -89,7 +89,10 @@ class GeometricDinov2Backbone(torch.nn.Module):
                 contribution zeroed before the output projection).
               capture: optional dict; filled with capture[li] =
                 (layer_in, layer_out) detached clones per layer (for
-                distillation pilots). None = exact legacy path.
+                distillation pilots). capture[(li,'blk')] additionally
+                holds a dict of block tensors {X,Q,K,V,C,Oattn,M,P1,G,Y}
+                (pre/post linears, concat, residuals). None = exact
+                legacy path.
         Returns: list of feature maps [B,384,H/14,W/14] in tap order,
                  plus patch_h, patch_w.
         """
@@ -146,6 +149,8 @@ class GeometricDinov2Backbone(torch.nn.Module):
                 q = F.linear(h, self._g(p + 'q.weight'), self._g(p + 'q.bias'))
                 k_ = F.linear(h, self._g(p + 'k.weight'), self._g(p + 'k.bias'))
                 v = F.linear(h, self._g(p + 'v.weight'), self._g(p + 'v.bias'))
+                if capture is not None:
+                    _cap_h, _cap_q, _cap_k, _cap_v = h, q, k_, v
                 q = q.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
                 k_ = k_.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
                 v = v.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
@@ -155,7 +160,11 @@ class GeometricDinov2Backbone(torch.nn.Module):
                 for h in range(HEADS):
                     if (li, h) in zh:
                         o[:, :, h * HEAD_DIM:(h + 1) * HEAD_DIM] = 0
+                if capture is not None:
+                    _cap_c = o
                 o = F.linear(o, self._g(p + 'proj.weight'), self._g(p + 'proj.bias'))
+                if capture is not None:
+                    _cap_o = o
                 if bgains is not None and bgains[2 * li]:
                     o = o * float(PHI ** bgains[2 * li])
                 ls1 = self._g(p + 'ls1')
@@ -166,9 +175,16 @@ class GeometricDinov2Backbone(torch.nn.Module):
                 pass
             else:
                 h2 = F.layer_norm(x, (D,), self._g(p + 'norm2.weight'), self._g(p + 'norm2.bias'))
+                m_in = x
+                if capture is not None:
+                    _cap_n2 = h2
                 h2 = F.linear(h2, self._g(p + 'mlp1.weight'), self._g(p + 'mlp1.bias'))
+                pre = h2
                 h2 = F.gelu(h2)
+                post = h2
                 h2 = F.linear(h2, self._g(p + 'mlp2.weight'), self._g(p + 'mlp2.bias'))
+                if capture is not None:
+                    _cap_y = h2
                 if bgains is not None and bgains[2 * li + 1]:
                     h2 = h2 * float(PHI ** bgains[2 * li + 1])
                 ls2 = self._g(p + 'ls2')
@@ -178,6 +194,19 @@ class GeometricDinov2Backbone(torch.nn.Module):
             if capture is not None:
                 capture[li] = (layer_in.detach().clone(),
                                x.detach().clone())
+                if 2 * li not in drop and 2 * li + 1 not in drop:
+                    capture[(li, 'blk')] = {
+                        'H': _cap_h.detach().clone(),
+                        'Q': _cap_q.detach().clone(),
+                        'K': _cap_k.detach().clone(),
+                        'V': _cap_v.detach().clone(),
+                        'C': _cap_c.detach().clone(),
+                        'Oattn': _cap_o.detach().clone(),
+                        'M': m_in.detach().clone(),
+                        'N2': _cap_n2.detach().clone(),
+                        'P1': pre.detach().clone(),
+                        'G': post.detach().clone(),
+                        'Y': _cap_y.detach().clone()}
 
         # final layernorm (HF apply_layernorm=True)
         norm_w = self._w.get('final_norm.weight')

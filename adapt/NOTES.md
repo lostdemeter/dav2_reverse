@@ -963,6 +963,52 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   frozen teacher nonlinearities (hybrid: learn projections, keep
   activations). (c) is untested and cheap — opinion: try it next.
 
+## 2026-09-22 — PRE-REGISTERED: blockfit pilot (hybrid RRR, activation rank)
+
+- Refinement forced by honesty: teacher LINEAR blocks are exactly
+  fittable at full width (they ARE linear) — the only question is
+  reduced width, and weight-space rank is dead. So (c) must measure
+  ACTIVATION-space compressibility (never measured): reduced-rank
+  regression per linear map (q/k/v/proj/mlp1/mlp2) at ranks
+  {192,96,48}, all narrowed maps composed SIMULTANEOUSLY with the
+  exact nonlinearity FORMS (softmax/GELU/LN recomputed, error
+  compounding included), block-output corr on held-out reals+synth.
+  Streamed covariances (no token storage); ridge 1e-6 for stability.
+- Context diagnostic first: activation effective rank (99%/99.9%
+  energy) per block I/O on real tokens — if full-rank, RRR is
+  expected to fail and the failure is located precisely.
+- Predictions: activation rank high (>=300/384 @99.9%); RRR-192
+  partial (~0.95); RRR-96 fail (<0.90); attention worse than MLP
+  (softmax compounding of Q/K errors). A hold (>=0.999) at 96
+  anywhere = first compression win in program history → gate.
+- Reading rules: fail everywhere -> hybrid dead; "mathematical
+  training" then requires either end-to-end discrete search over a
+  small student DSL (foundry-style, few-shot preserved) or gradient
+  descent (few-shot abandoned). Both named, neither started.
+
+## 2026-09-22 — OUTCOME: hybrid partial — early layers compressible (first!)
+
+- OLS ceiling 1.0000 everywhere (method valid; gaps are pure
+  capacity). Activation effrank depth-graded: L0 q needs 27/384
+  @99%, L5 144, L11 153 (mlp2: 127/313/177). Weight-space full-rank
+  but ACTIVATION-space compressible early — never measured before.
+- Composed (all maps narrowed + exact forms, compounding incl.):
+  L0 r192 layer 0.99759 (attn block 0.99995!), r96 0.98826;
+  L5 r192 0.92235; L11 r192 0.85616. Predictions partially hold
+  (L5/L11 fail as said; L0 far better than ~0.95; "attention worse"
+  true only at L11). One own-bug caught: 'ols' row first printed
+  rank-48 values (min vs max key) — rerun, ceiling confirmed.
+- COHERENT PICTURE (three axes triangulate): early = linear-ish,
+  compressible, gain-fragile (sets coordinates); late = nonlinear,
+  incompressible, gain-robust (absorbable tweaks). Weight-space is
+  full-rank everywhere; removal impossible anywhere; but
+  activation-space early layers have slack.
+- For phi-from-birth: FIRST compression-compatible finding — a
+  depth-graded student prior (narrow early, full late) with
+  closed-form RRR block fits (few-shot preserved). Not a win
+  (0.988 < bar, depth-parity unmeasured) — a direction with
+  numbers. Proposed next: depth-graded student pilot, depth-gated.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
