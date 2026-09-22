@@ -792,3 +792,33 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Thread 1 of the closing program DONE. Remaining: fixed-point
   sensor path, upstream PR, bigger co-search arena, substrate
   experiment, 5 empty strata.
+
+## 2026-09-22 — PRE-REGISTERED: fixed-point sensor path (v1, 518-native)
+
+- Gap (README honest boundary): uint8->normalized + patch-embed +
+  CLS/pos still float. v1: `sensor_encode_fixed` (per-channel integer
+  affine, K=8 extra bits) + `sensor_patch_tokens` (im2col +
+  int_linear_fixed + fixed CLS/pos) in geo_int; `nn_sensor_encode` +
+  `nn_patch_tokens` in C, bit-exact vs the exact Python fns.
+- Scope, stated: 518-native only (pos_embed is 1370x384 baked; resize
+  interp stays host-side like decode-for-display). Accuracy gate is
+  corr-based (integer sensor ~= float preprocess within 1 ULP; no
+  bit-exact-vs-float claim possible): fixed tokens vs float backbone
+  tokens >=0.9999, and fixed-sensor full layer0 vs HF >=0.999.
+- Predictions: C bit-exact first try (affine + gather, no floor
+  subtlety beyond floor_div); corr gates pass with margin (>=0.9999
+  tokens, layer0 stays >=0.999).
+
+## 2026-09-22 — OUTCOME: sensor path wired (Python + C, gates pass)
+
+- geo_int: `sensor_encode_fixed` + `bake_sensor_fixed` +
+  `sensor_patch_tokens` + `sensor_parity`. Tokens vs HF embeddings
+  0.999986 (maxabs 0.003 ~ bicubic-resample residue, stated);
+  sensor-fed layer0 vs HF 0.999946. Both bars pass with margin.
+- C: `nn_sensor_encode` + `nn_patch_tokens`, bit-exact 0/2352 +
+  0/1920 first try; `make test` ALL PASS x3 suites; zero-float grep
+  clean. One macro collision (SN_T count vs array) fixed at build.
+- Thread 2 of the closing program DONE. Honest remainder: resize
+  interp + decode-for-display stay host-side (documented v1 scope).
+  Remaining: upstream PR, bigger co-search arena, substrate
+  experiment, 5 empty strata.

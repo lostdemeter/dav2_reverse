@@ -96,4 +96,22 @@ void nn_attention_fixed(const int64_t *X,
                         const int64_t *bv, const int64_t *bp,
                         int64_t *O, int64_t *tmp, int N, int D, int heads);
 
+/* Fixed-point sensor front end (518-native). Mirrors geo_int's
+ * sensor_encode_fixed / sensor_patch_tokens. Resize stays host-side;
+ * pos is the baked 518-native grid (T = ph*pw + 1 rows). */
+
+/* uint8 RGB (H*W*3) -> normalized fixed 2^-14.
+ * X[(y*W+x)*3+c] = floor((p*A[c] + B[c] + 2^(K-1)) / 2^K).
+ * A,B: per-channel affine consts (see sensor_affine_consts). */
+void nn_sensor_encode(const uint8_t *rgb, int64_t *X, int H, int W,
+                      const int64_t *A, const int64_t *B, int K);
+
+/* Patch tokens: row-major 14x14 gather, linear per patch (Di=588;
+ * accumulator bound documented at sensor_patch_tokens), CLS prepend,
+ * pos add. X:(H,W,3) fixed, Wp:(384,588), bp/cls:(384), pos:(T,384),
+ * T:(ph*pw+1,384), ph = H/14. */
+void nn_patch_tokens(const int64_t *X, const int64_t *Wp, const int64_t *bp,
+                     const int64_t *cls, const int64_t *pos,
+                     int64_t *T, int H, int W);
+
 #endif

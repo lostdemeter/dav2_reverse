@@ -254,3 +254,37 @@ void nn_attention_fixed(const int64_t *X,
     }
     nn_linear_fixed(Oc, Wp, bp, O, N, D, D);
 }
+
+void nn_sensor_encode(const uint8_t *rgb, int64_t *X, int H, int W,
+                      const int64_t *A, const int64_t *B, int K) {
+    int i, c, n = H * W * 3;
+    int64_t half = (int64_t)1 << (K - 1);
+    int64_t step = (int64_t)1 << K;
+    for (i = 0; i < n; i++) {
+        c = i % 3;
+        /* p*A+B+half fits easily (p<=255, |A|,|B| < 2^31); floor_div floors. */
+        X[i] = floor_div((int64_t)rgb[i] * A[c] + B[c] + half, step);
+    }
+}
+
+void nn_patch_tokens(const int64_t *X, const int64_t *Wp, const int64_t *bp,
+                     const int64_t *cls, const int64_t *pos,
+                     int64_t *T, int H, int W) {
+    int ty, tx, y, x, c, d, ph = H / 14;
+    int64_t patch[588];
+    int64_t out[384];
+    for (d = 0; d < 384; d++) T[d] = cls[d] + pos[d];
+    for (ty = 0; ty < ph; ty++) {
+        for (tx = 0; tx < ph; tx++) {
+            int64_t *Trow = T + (1 + ty * ph + tx) * 384;
+            const int64_t *Prow = pos + (1 + ty * ph + tx) * 384;
+            for (y = 0; y < 14; y++)
+                for (x = 0; x < 14; x++)
+                    for (c = 0; c < 3; c++)
+                        patch[(c * 14 + y) * 14 + x] =
+                            X[((ty * 14 + y) * W + tx * 14 + x) * 3 + c];
+            nn_linear_fixed(patch, Wp, bp, out, 1, 588, 384);
+            for (d = 0; d < 384; d++) Trow[d] = out[d] + Prow[d];
+        }
+    }
+}

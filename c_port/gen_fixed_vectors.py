@@ -160,6 +160,26 @@ def main():
               emit_arr('AN_BP', W['proj.bias'], 'int64_t'),
               emit_arr('AN_O', AO, 'int64_t')]
 
+    # 7. sensor front end (28x28 -> 2x2 patches + CLS = 5 tokens):
+    # exact G.sensor_encode_fixed + G.sensor_patch_tokens
+    SH, SW = 28, 28
+    SU8 = rng.integers(0, 256, size=(SH, SW, 3)).astype(np.uint8)
+    SA, SB = G.sensor_affine_consts()
+    SX = G.sensor_encode_fixed(SU8)
+    SBK = G.bake_sensor_fixed(REPO / 'weights' / 'geometric_backbone.npz')
+    ST = G.sensor_patch_tokens(SX, SBK['patch_w'], SBK['patch_b'],
+                               SBK['cls'], SBK['pos'][:5])
+    parts += [f'#define SN_H {SH}', f'#define SN_W {SW}',
+              f'#define SN_K {G.SENSOR_K}', '#define SN_T 5',
+              emit_arr('SN_U8', SU8, 'uint8_t'),
+              emit_arr('SN_A', SA, 'int64_t'), emit_arr('SN_B', SB, 'int64_t'),
+              emit_arr('SN_X', SX, 'int64_t'),
+              emit_arr('SN_WP', SBK['patch_w'], 'int64_t'),
+              emit_arr('SN_BP', SBK['patch_b'], 'int64_t'),
+              emit_arr('SN_CLS', SBK['cls'], 'int64_t'),
+              emit_arr('SN_POS', SBK['pos'][:5], 'int64_t'),
+              emit_arr('SN_TOK', ST, 'int64_t')]
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text('\n\n'.join(parts) + '\n')
     print(f'wrote {OUT}')

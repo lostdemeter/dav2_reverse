@@ -135,6 +135,22 @@ int main(void) {
         printf("attention mismatches: %d/%d\n", mism, AN_N * AN_D);
     }
 
+    /* 9. sensor front end bit-exact (encode + patch tokens) */
+    {
+        int mism = 0, k;
+        static int64_t X[SN_H * SN_W * 3];
+        static int64_t T[SN_T * 384];
+        nn_sensor_encode(SN_U8, X, SN_H, SN_W, SN_A, SN_B, SN_K);
+        for (k = 0; k < SN_H * SN_W * 3; k++) if (X[k] != SN_X[k]) mism++;
+        CHECK(mism == 0, "sensor_encode mismatches=%d/%d", mism,
+              SN_H * SN_W * 3);
+        printf("sensor_encode mismatches: %d/%d\n", mism, SN_H * SN_W * 3);
+        nn_patch_tokens(X, SN_WP, SN_BP, SN_CLS, SN_POS, T, SN_H, SN_W);
+        for (k = 0; k < SN_T * 384; k++) if (T[k] != SN_TOK[k]) mism++;
+        CHECK(mism == 0, "patch_tokens mismatches=%d/%d", mism, SN_T * 384);
+        printf("patch_tokens mismatches: %d/%d\n", mism, SN_T * 384);
+    }
+
     if (fails == 0) printf("C FIXED-NN: ALL PASS\n");
     else printf("C FIXED-NN: %d FAILURES\n", fails);
     return fails != 0;

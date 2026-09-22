@@ -895,6 +895,121 @@ def int_transformer_layer_fixed(X, W):
     return (x + (m * W['ls2'] + (1 << (INT_F - 1))) // (1 << INT_F)).astype(np.int64)
 
 
+# ---------------------------------------------------------------------------
+# Fixed-point sensor front end (518-native, integer-only).
+#
+# Replaces the last float boundary before the backbone: uint8 RGB ->
+# normalized fixed 2**14 -> patch tokens + CLS/pos, all integer.
+# Resize interpolation stays host-side (like decode-for-display);
+# pos_embed is the baked 1370x384 518-native grid, so non-518 inputs
+# are out of scope for v1 (documented, not hidden).
+# ---------------------------------------------------------------------------
+
+SENSOR_MEAN = (0.485, 0.456, 0.406)
+SENSOR_STD = (0.229, 0.224, 0.225)
+SENSOR_K = 8  # extra precision bits in the affine
+
+
+def sensor_affine_consts():
+    """Per-channel (A_c, B_c): X = floor((p*A_c + B_c + 2**(K-1))/2**K).
+
+    Offline floats OK (constants, not runtime). A_c = 2**(14+K)/(255*s_c),
+    B_c = -m_c*2**(14+K)/s_c, rounded to int64."""
+    A, B = [], []
+    for m, s in zip(SENSOR_MEAN, SENSOR_STD):
+        A.append(int(round(2 ** (INT_F + SENSOR_K) / (255 * s))))
+        B.append(int(round(-m * 2 ** (INT_F + SENSOR_K) / s)))
+    return (np.array(A, dtype=np.int64), np.array(B, dtype=np.int64))
+
+
+def sensor_encode_fixed(rgb_u8):
+    """uint8 RGB (H,W,3) -> normalized fixed 2**14 int64. Integer-only."""
+    A, B = sensor_affine_consts()
+    p = np.asanyarray(rgb_u8, dtype=np.int64)
+    half = 1 << (SENSOR_K - 1)
+    return ((p * A[None, None, :] + B[None, None, :] + half)
+            // (1 << SENSOR_K)).astype(np.int64)
+
+
+def bake_sensor_fixed(npz_path):
+    """Bake patch-embed + CLS + pos to fixed 2**14 int64 dict."""
+    baked = load_baked_ints(npz_path)
+    s, e = baked['patch_proj.weight']
+    W = _phi_to_fixed14(s, e).reshape(384, -1)  # (384, 588)
+    s, e = baked['patch_proj.bias']
+    b = _phi_to_fixed14(s, e).reshape(-1)
+    s, e = baked['cls_token']
+    cls = _phi_to_fixed14(s, e).reshape(-1)
+    s, e = baked['pos_embed']
+    pos = _phi_to_fixed14(s, e).reshape(-1, 384)
+    return {'patch_w': W, 'patch_b': b, 'cls': cls, 'pos': pos}
+
+
+def sensor_patch_tokens(fixed_rgb, W, b, cls, pos):
+    """Fixed normalized (518,518,3) -> (1370,384) tokens. Integer-only.
+
+    Row-major 14x14 patches via int_linear_fixed (Di=588; accumulator
+    bound: 588 terms x ~2^16 x ~2^14 << 2^63), then CLS prepend + pos add.
+    """
+    H, Wd, _ = fixed_rgb.shape
+    assert H % 14 == 0 and Wd % 14 == 0 and pos.shape[0] == H // 14 * (Wd // 14) + 1
+    ph = H // 14
+    T = np.empty((ph * ph + 1, 384), dtype=np.int64)
+    T[0] = cls
+    patch = np.empty((1, 588), dtype=np.int64)
+    for ty in range(ph):
+        for tx in range(ph):
+            block = fixed_rgb[ty * 14:(ty + 1) * 14, tx * 14:(tx + 1) * 14, :]
+            patch[0] = block.transpose(2, 0, 1).reshape(-1)
+            T[1 + ty * ph + tx] = int_linear_fixed(patch, W, b)[0]
+    return T + pos
+
+
+def sensor_parity():
+    """Fixed sensor tokens vs HF embeddings; sensor-fed layer0 vs HF layer0.
+    Pass: tokens > 0.9999, layer0 > 0.999."""
+    import torch
+    from transformers import AutoModelForDepthEstimation, AutoImageProcessor
+    from PIL import Image
+    gx, gy = np.meshgrid(np.linspace(0, 1, 518, dtype=np.float32),
+                         np.linspace(0, 1, 518, dtype=np.float32))
+    rgb = np.stack([gx, gy, np.full((518, 518), 0.5, dtype=np.float32)], axis=-1)
+    u8 = (rgb * 255).astype(np.uint8)
+    proc = AutoImageProcessor.from_pretrained(
+        'depth-anything/Depth-Anything-V2-Small-hf')
+    model = AutoModelForDepthEstimation.from_pretrained(
+        'depth-anything/Depth-Anything-V2-Small-hf').eval()
+    bb = model.backbone
+    pv = proc(images=Image.fromarray(u8), return_tensors='pt')['pixel_values']
+    got = {}
+    h1 = bb.encoder.layer[0].register_forward_hook(
+        lambda m, i, o: got.__setitem__(
+            'full', o[0].detach() if isinstance(o, tuple) else o.detach()))
+    with torch.no_grad():
+        emb = bb.embeddings(pv)
+        _ = bb.encoder.layer[0](emb)
+    h1.remove()
+    fixed = sensor_encode_fixed(u8)
+    baked = bake_sensor_fixed(Path(__file__).parent / 'weights' / 'geometric_backbone.npz')
+    T = sensor_patch_tokens(fixed, baked['patch_w'], baked['patch_b'],
+                            baked['cls'], baked['pos'])
+    ref = emb.squeeze(0).numpy().astype(np.float64)
+    c0 = float(np.corrcoef((T.astype(np.float64) / INT_S).flatten(),
+                           ref.flatten())[0, 1])
+    maxabs = float(np.max(np.abs(T.astype(np.float64) / INT_S - ref)))
+    print(f"  [sensor tokens] corr={c0:.6f} maxabs={maxabs:.6f} "
+          f"(fixed units: {maxabs * INT_S:.2f} ULP)")
+    W = bake_layer_fixed(Path(__file__).parent / 'weights' / 'geometric_backbone.npz', 0)
+    full = int_transformer_layer_fixed(T, W)
+    ref2 = got['full'].squeeze(0).numpy().astype(np.float64)
+    c1 = float(np.corrcoef((full.astype(np.float64) / INT_S).flatten(),
+                           ref2.flatten())[0, 1])
+    print(f"  [sensor-fed layer0] corr={c1:.6f}")
+    ok = c0 > 0.9999 and c1 > 0.999
+    print("  SENSOR:", "PASS" if ok else "FAIL")
+    return ok
+
+
 def transformer_layer_parity(size: int = 112):
     """Full integer transformer layer vs HF DINOv2 layer0, stage-wise.
 

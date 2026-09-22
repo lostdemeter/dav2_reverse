@@ -15,6 +15,7 @@ comments only), plus offline generators whose floats never ship.
 | fixed_dot, rescale, head_fixed | `fixed_nn.c` | `fixed_dot_terms`, `_to_common_scale`, `_head_fixed_pixel` | bit-exact 0/64 |
 | linear, layernorm, GELU-vec | `fixed_nn.c` | `int_linear_fixed`, `int_layernorm_affine`, `int_gelu_fixed` | bit-exact (incl. 384-wide) |
 | attention composition | `fixed_nn.c` | `int_attention_fixed` | bit-exact 0/3072 (real layer0 W, N=8) |
+| sensor front end (518-native) | `fixed_nn.c` | `sensor_encode_fixed`, `sensor_patch_tokens` | bit-exact 0/2352 + 0/1920; tokens 0.999986 vs HF |
 
 Portability note: the one trap is floor semantics — Python `//`/`>>`
 round toward −inf, C truncates. Every negative-capable site uses
