@@ -984,6 +984,39 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   EfficiencyRule+MarginRule. Predictions stand (stage drops fail;
   48-stage halves tie, 384-stage fails).
 
+## 2026-09-22 — PRE-REGISTERED: neck v4 search (drops + stream zeros)
+
+- Scope correction (honest): channel HALVING needs fitted narrower
+  weights (no fitting harness exists) — v4 probes what deletion can:
+  fusion-stage drops (1 of 4, size chain bridged by harness interp,
+  documented) + reassemble-stream zeros (1 of 4 pyramid scales) +
+  conv-channel zero-halves (structured, no fitting). Byte model:
+  per-stage neck params measured EXACT from npz shapes (same
+  discipline as ATTN/MLP block bytes).
+- Driver adapt/neck_search.py (own DSL {stage_drop, stream_zero,
+  chan_half}, EfficiencyRule, same fixtures/corr/margin reading).
+  ~20 trials to exhaustion, minutes not hours.
+- Predictions: stage drops fail (pyramid roles load-bearing, like
+  taps); stream-zero small-scale (i=3) nearest to tie; channel
+  halves fail (backbone sparsity died at 5%). Any hold+bytes-win
+  goes to the emitter immediately.
+
+## 2026-09-22 — OUTCOME N1: neck holds everywhere; margin gate catches 3
+
+- 12/12 rejected, incumbent retained. Stage drops all collapse
+  (means 0.13 to -1.0). Stream-zero i=3 collapses HARDEST (-1.0) —
+  prediction inverted on which stream (deep stream matters most,
+  consistent with tap-12 irreplaceability); nearest-to-tie is
+  zero1/zero0, not i=3. Stated.
+- The instrument paid for itself: zero1, half0, half1 are binary
+  FULL TIES (e6/6 g4/4 r3/3) with millipoint mean drops — rejected
+  SOLELY by `margin_regressed:exploration`. Without the margin gate
+  all three PROMOTE on bytes (false wins). Real panel agrees
+  (3/8, 6/8, 5/8 — rejection direction). This is the second time a
+  guard earned its keep by refusing (dissolution guard was first).
+- Neck CLOSED (drops fail, halves fail-or-margin, zeros fail).
+  Direction 6 DONE. Remaining open: distillation design (discussion).
+
 ## 2026-09-22 — PRE-REGISTERED: neck topology search
 
 - DSL v4: fusion depth (2 vs 3 residual blocks per stage? — NO:
