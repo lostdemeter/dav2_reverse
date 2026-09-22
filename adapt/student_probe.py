@@ -69,27 +69,24 @@ def main():
 
     zr = np.load(ADAPT / 'fixtures' / 'strata_real.npz', allow_pickle=True)
     zr_ids = set(str(x) for x in zr['ids'])
-    # fit pool preferred (strata_real untouched -> medians stable)
-    fp = ADAPT / 'fixtures' / 'fit_pool.npz'
+    # paired (rgb, ref) pool: fit_pool first, then strata_real
+    pool_pairs = []
     if fp.exists():
         zf = np.load(fp, allow_pickle=True)
-        pool_rgb = [zf['rgb'][i].astype(np.float32) / 255.0
-                    for i in range(len(zf['rgb']))]
-        print(f"fit pool: {len(pool_rgb)} scenes", flush=True)
-    else:
-        pool_rgb = []
-    base_rgb = [zr['rgb'][i].astype(np.float32) / 255.0
-                for i in range(len(zr['rgb']))]
-    all_fit = pool_rgb + base_rgb
+        pool_pairs = [(zf['rgb'][i].astype(np.float32) / 255.0,
+                       zf['ref'][i].astype(np.float64)) for i in range(len(zf['rgb']))]
+        print(f"fit pool: {len(pool_pairs)} scenes", flush=True)
+    base_pairs = [(zr['rgb'][i].astype(np.float32) / 255.0,
+                   zr['ref'][i].astype(np.float64)) for i in range(len(zr['rgb']))]
+    all_fit = pool_pairs + base_pairs
     navail = len(all_fit)
     nfit = min(N_FIT, navail - 6)
     print(f"fit scenes: {nfit} (asked {N_FIT}, have {navail})", flush=True)
-    fit_rgb = all_fit[:nfit]
+    fit_rgb = [p[0] for p in all_fit[:nfit]]
     fx = load_fixtures(include_audit=False)
     scenes = ([(rgb, ref, cid) for role in ('exploration', 'gate')
                for rgb, ref, cid in fx[role][:3]] +
-              [(zr['rgb'][i].astype(np.float32) / 255.0,
-                zr['ref'][i].astype(np.float64), f"eval-{i}")
+              [(all_fit[i][0], all_fit[i][1], f"eval-{i}")
                for i in range(nfit, nfit + 6)])
     print(f"{len(scenes)} eval scenes", flush=True)
 
