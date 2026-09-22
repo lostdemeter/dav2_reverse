@@ -670,3 +670,42 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   'unverified', never 'ambiguous'). Truly-empty strata are 5, split
   cells 8. Saturation logic (needs n_empty==0) stays conservative;
   fixing the labels + split count next.
+
+## 2026-09-22 — CORRECTION + codebook verdict (P4 fails honestly, locality wins big)
+
+- CORRECTION (own bug, caught by measurement): the first codebook
+  folded sign into the level (lvl=sign*(e-BIAS)/K). lvl=+35.9 is
+  BOTH tiny-negative and huge-positive — ambiguous space, decoded
+  garbage (max rel err 3e15, corr ~0.21 flat across C). Retracted;
+  magnitude-only codebook (mu=(e-BIAS)/K, signs exact 1-bit sidecar).
+  Joint-codebook P4-as-first-written is falsified as formulated.
+- Global magnitude codebook dose-response (6 scenes, 3 synth + 3
+  real): C=4096 0.852 / 2048 0.30 / 512 0.11 / 128 negative. Even
+  4096 (mean rel err 0.2%/weight) fails — 22M tiny roundings
+  accumulate through 12 softmax attention layers (the anti-averager).
+- Per-layer codebooks (P4's letter): 2048 0.99829 (1/6), 4096
+  0.99810 (3/6), 8192 0.99876 (3/6). Locality buys +0.15 over
+  global at comparable levels (distributions are layer-local) — the
+  pathway-relevant win. But the curve SATURATES ~0.9988 below the
+  0.999 bar: more levels don't close it. P4 FAILS as stated; no
+  promotion (EfficiencyRule correctly refuses — these are
+  regressions, not ties).
+- Guard probe (outliers |mu|>15 kept exact, 1.07M residuals, +4MB):
+  zero gain (0.99801 vs 0.99829). Damage is in the dense core, not
+  the tails — evidence against few-load-bearing-outliers for this
+  axis. Guard variant retired.
+- Standing: codebook alone = genuine near-miss (34-42MB vs 66MB
+  phi, ~0.9988). Kept as evidence + stacking candidate. Next axis:
+  low-rank (float factors first = thesis upper bound, then
+  phi factors = deployable). Pre-registered below.
+
+## 2026-09-22 — PRE-REGISTERED: low-rank pathway probe
+
+- Per-matrix truncated SVD at rank fractions {1/2, 1/4, 1/8},
+  float factors patched into buffers (upper bound — no phi rounding
+  confound), same 6 probe scenes, seed pipeline, absolutes printed.
+- Predictions: rank-1/2 holds >=0.999 on >=4/6 (directional
+  redundancy is real); rank-1/8 collapses (<0.95 mean); attention
+  proj/qkv more sensitive per-rank than MLP (softmax amplification).
+  If rank-1/2 fails everywhere, the rank thesis is dead and the
+  program moves to sparsity/sharing without mourning.
