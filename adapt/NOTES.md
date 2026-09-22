@@ -882,3 +882,23 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   co-adaptation); random partitions scramble them. 5 seeds/arm,
   pop10/gens12, --real 8. If hand ties random, the style thesis
   takes the hit it deserves.
+
+## 2026-09-22 — PRE-REGISTERED: substrate experiment (thread 5)
+
+- Question (lattice ≅ contracts?): do gate verdicts float free of
+  the phi substrate, or measure the lattice+model joint?
+- Design (same-harness exact-vs-mush, learned from the bar
+  correction): mush = per-layer C=2048 codebook backbone (measured
+  0.9983 — a real, principled coarsening, not arbitrary noise).
+  Width DSL + integer harness UNCHANGED (backbone is the substrate,
+  widths the variable). Recalibrate the bar to MUSH-seed capability
+  (same rule as CORR_PASS_INT — absolute bars would make everything
+  trivially fail, which proves only tightness). Rerun the decisive
+  graduation trials: exp8 (promoted 14/14) + dmax1024 (rejected,
+  retention loss) + a frac move (correctly unpromotable).
+- Predictions: mush-seed capability lands 0.997-0.9985; verdict
+  PATTERN reproduces (exp8 promotes, dmax1024 rejects, frac stays
+  unpromotable) → contracts substrate-invariant at recalibrated
+  bars. If the pattern scrambles (e.g. dmax1024 promotes under mush),
+  verdicts are substrate-bound — stated, not mourned.
+- Compute needs GPU (width-harness evals); runs after the race frees it.
