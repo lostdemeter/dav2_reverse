@@ -141,8 +141,10 @@ def ssi_gm_loss(pred, target):
     A = torch.stack([p, torch.ones_like(p)], dim=-1)  # (B,N,2)
     sol = torch.linalg.lstsq(A, t.unsqueeze(-1)).solution.squeeze(-1)
     s, sh = sol[:, 0].float(), sol[:, 1].float()
-    aligned = s.view(B, 1, 1, 1) * pred + sh.view(B, 1, 1, 1)
-    resid = (aligned - target).abs()
+    P4 = pred.unsqueeze(1)
+    T4 = target.unsqueeze(1)
+    aligned = s.view(B, 1, 1, 1) * P4 + sh.view(B, 1, 1, 1)
+    resid = (aligned - T4).abs()
     flat = resid.reshape(B, -1)
     thr = flat.quantile(0.9, dim=1).view(B, 1, 1, 1)
     mask = (resid <= thr).float()
@@ -152,7 +154,7 @@ def ssi_gm_loss(pred, target):
     Ky = Kx.transpose(-1, -2)
     ga = F.conv2d(aligned, Kx, padding=1).abs() + F.conv2d(aligned, Ky,
                                                            padding=1).abs()
-    gt = F.conv2d(target, Kx, padding=1).abs() + F.conv2d(target, Ky,
+    gt = F.conv2d(T4, Kx, padding=1).abs() + F.conv2d(T4, Ky,
                                                           padding=1).abs()
     gm = (((ga - gt).abs()) * mask).sum() / mask.sum().clamp_min(1.0)
     return mae + 2.0 * gm, mae.detach(), gm.detach()
