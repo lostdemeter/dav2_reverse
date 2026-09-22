@@ -919,3 +919,37 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   bars. If the pattern scrambles (e.g. dmax1024 promotes under mush),
   verdicts are substrate-bound — stated, not mourned.
 - Compute needs GPU (width-harness evals); runs after the race frees it.
+
+## 2026-09-22 — OUTCOME: verdicts substrate-invariant (thread 5 DONE)
+
+- Mush-seed means 0.9951/0.9906/0.9959 (pre-registered 0.997-0.9985:
+  slightly high, stated). Recalibrated mush bar 0.985 (same rule as
+  CORR_PASS_INT: below mush-seed floor, above broken <=0.90).
+- Pattern at respective bars: exp8 IDENTICAL to seed to 5 decimals
+  under both substrates (0.99735 exact / 0.99509 mush — the tie is
+  numerical, not just verdict-wise; tree never reads EXP, consistent
+  with the honesty fix); dmax1024 catastrophic under both (worse
+  under mush: 0.59/0.36/0.76 vs 0.70/0.56/0.85, same verdict);
+  frac2048 ≡ seed under both. One gate scene the mush seed misses
+  at 0.99 is a capability limit (all mush configs miss it), not a
+  verdict — exactly why bars recalibrate.
+- Answer: CONTRACTS CARRY IT. Verdict structure reproduces across
+  substrates at calibrated bars. Thread 5 DONE. Remaining: 5 empty
+  strata (14 hole-fillers fetched, strata re-running).
+
+## 2026-09-22 — OUTCOME: 12/16 strata, unreachable corners documented (thread 6 DONE)
+
+- 14 hole-fillers appended (54 reals); recompute: 79 scenes, 12/16
+  hit, 19/20 held-out PASS. Seed 79/79 everywhere; tap2 splits in 6
+  strata; analytic/drop23 fail 0/N in all 12 (fourth independent
+  reproduction of every search rejection).
+- Honest remainder, two kinds: (a) E0T1L1V0/V1 — 0 hits in 6452 COCO
+  images (train1500 + val4952): low-edge + high-texture +
+  high-lumspread is ≈absent in natural photography. Stratification
+  finding, not a data failure: the median-split stat set has
+  degenerate corners. (b) E1T0L0V0/V1 — median-shift casualties
+  (hit before, empty after refilling). Holes are moving targets
+  under recomputed medians — the price of honest stratification.
+- Thread 6 closed at 12/16 with the corners documented. Chasing two
+  never-observed strata with exotic sources is negative-value work;
+  the matrix already discriminates all live questions.
