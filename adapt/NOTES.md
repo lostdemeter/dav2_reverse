@@ -709,3 +709,34 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   proj/qkv more sensitive per-rank than MLP (softmax amplification).
   If rank-1/2 fails everywhere, the rank thesis is dead and the
   program moves to sparsity/sharing without mourning.
+
+## 2026-09-22 — OUTCOME: rank thesis dead, sharing half-retired (measure-first pays)
+
+- Low-rank (float factors, upper bound): 0/6 in ALL 9 configs —
+  rank-1/2 all 0.08, attn-only 0.26, mlp-only 0.25; rank-1/8 worse.
+  All three pre-registered predictions fail. Mechanism measured, not
+  mourned: spectra are full-rank (L5-mlp1 needs 362/384 dims for 99%
+  energy; q needs 259/384). Directional redundancy is zero — the
+  weights use every direction they have. Rank axis RETIRED.
+- Cross-layer sharing, decided OFFLINE (no pipeline runs spent):
+  top-64 subspace overlap L0-L1/L0-L11/L5-L6: q 0.33-0.38 (vs ~0.13
+  random — weak-moderate shared structure in attention), mlp1 0.18
+  (≈ noise floor). MLP-sharing probe RETIRED by measurement before
+  spending a single forward pass. Attention-sharing stays a
+  qualified-maybe (needs a probe to decide; 0.35 overlap won't carry
+  parity, stated upfront).
+- Standing pattern across axes: precision (codebook 0.9988 saturates
+  below bar), direction (full-rank), blocks/heads/gains (all
+  load-bearing from prior searches). The model is dense and
+  irreducible at every granularity tried. Remaining: structured
+  sparsity (last unmeasured axis).
+
+## 2026-09-22 — PRE-REGISTERED: structured sparsity probe
+
+- Zero whole output-rows (neurons) by row-L2 at row fractions
+  {5%, 10%, 25%} on 2D backbone weights (norms/scales untouched),
+  same 6 probe scenes, absolutes printed.
+- Predictions (weak, stated): 5% degrades to ~0.99 (marginal, not
+  parity); 25% collapses (<0.9). Dense-core sensitivity from the
+  codebook axis says small weights matter. If 5% HOLDS parity it is
+  the first structural win and goes to the gate immediately.
