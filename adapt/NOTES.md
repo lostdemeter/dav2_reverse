@@ -822,3 +822,22 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   interp + decode-for-display stay host-side (documented v1 scope).
   Remaining: upstream PR, bigger co-search arena, substrate
   experiment, 5 empty strata.
+
+## 2026-09-22 — Upstream PR prepared (NOT filed — needs explicit push approval)
+
+- Spec BASELINE_UPSTREAM.md verified against the live core: the
+  `baseline_failed` reason exists but fires only on missing
+  incumbent, never on quality — the gap is real, the diff applies.
+- Patch implemented in scratch checkout (/tmp/opencode/
+  adaptation_foundry, NOT our repo): optional `baseline_gate`
+  callable on Experimenter, checked once after baseline accept,
+  fail-closed to done/`baseline_failed`, reason on self.error.
+  Convention identical to adapt/baseline.py gates (pass-through).
+- 5 new BaselineGateTests + full upstream suite 73/73 green.
+  Diff + PR body staged at /tmp/opencode/baseline_gate_pr.diff +
+  baseline_gate_pr_body.md. Filing = pushing upstream = needs the
+  user's explicit say-so (house rule 6). Nothing pushed.
+- Echion recon: vendor copy IN SYNC with upstream; NO direct
+  Experimenter( call sites exist there yet (contracts only) — so the
+  "one-line migration" is vacuous today, just a vendor sync post-merge.
+  Spec's migration paragraph corrected accordingly in the PR body.
