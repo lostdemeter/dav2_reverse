@@ -1078,6 +1078,18 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   gate; saturation <0.99 closes closed-form (diminishing) -> the
   fork.
 
+## 2026-09-22 — OUTCOME at data-cap (A-seq 0.982, still rising — not closing yet)
+
+- 48 reals (all we own): A-seq 0.98179 (10->0.895, 30->0.976,
+  48->0.982). Still climbing but flattening. F single-layer stable
+  ~0.999 (8/12); E flat ~0.99.
+- Fairness check on the pre-registered read: the cap is OUR DATA
+  (54 reals), not the method's curve — closing closed-form while
+  capped-and-rising would be verdict-by-data-limit. Fetching 150
+  more fit scenes (SEPARATE file fit_pool.npz — NOT strata_real,
+  which would shift medians; stated) then one A-seq rerun decides:
+  >=0.99 open, >=0.999 gate, flat fork.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
