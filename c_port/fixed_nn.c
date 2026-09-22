@@ -164,3 +164,93 @@ void nn_gelu_vec(const int32_t *X, int32_t *Y, int n) {
     int i;
     for (i = 0; i < n; i++) Y[i] = phi_gelu(X[i]);
 }
+
+#define EXP_LUT_N 262145
+
+void nn_attn_scores(const int64_t *Q, const int64_t *K,
+                    int64_t *S, int N, int hd) {
+    int i, j, k;
+    for (i = 0; i < N; i++) {
+        for (j = 0; j < N; j++) {
+            uint64_t acc = 0; /* wraps mod 2^64, identical to numpy int64 */
+            for (k = 0; k < hd; k++)
+                acc += (uint64_t)Q[i * hd + k] * (uint64_t)K[j * hd + k];
+            /* (dot + 2^13) >> 14 floors (numpy >>); then //8 floors. */
+            S[i * N + j] = floor_div(
+                floor_div128((__int128)(int64_t)acc + NN_HALF,
+                             (int64_t)NN_ONE), 8);
+        }
+    }
+}
+
+void nn_softmax_rows(const int64_t *S, int64_t *NUM, int64_t *DEN,
+                      int rows, int cols) {
+    int i, j;
+    for (i = 0; i < rows; i++) {
+        const int64_t *row = S + i * cols;
+        int64_t *num = NUM + i * cols;
+        int64_t vmax = row[0];
+        uint64_t den = 0;
+        for (j = 1; j < cols; j++) if (row[j] > vmax) vmax = row[j];
+        for (j = 0; j < cols; j++) {
+            int64_t dd = vmax - row[j];
+            if (dd < 0) dd = 0;
+            if (dd > EXP_LUT_N - 1) dd = EXP_LUT_N - 1;
+            num[j] = (int64_t)PHI_EXP_LUT[dd];
+            den += (uint64_t)num[j]; /* wraps mod 2^64, like numpy */
+        }
+        DEN[i] = (den == 0) ? 1 : (int64_t)den;
+    }
+}
+
+void nn_attn_av(const int64_t *NUM, const int64_t *DEN, const int64_t *V,
+                int64_t *O, int rows, int terms, int hd) {
+    int i, j, k;
+    for (i = 0; i < rows; i++) {
+        int64_t den = DEN[i] == 0 ? 1 : DEN[i];
+        for (j = 0; j < hd; j++) {
+            uint64_t acc = 0;
+            for (k = 0; k < terms; k++)
+                acc += (uint64_t)NUM[i * terms + k] * (uint64_t)V[k * hd + j];
+            O[i * hd + j] = floor_div128((__int128)(int64_t)acc, den);
+        }
+    }
+}
+
+void nn_attention_fixed(const int64_t *X,
+                        const int64_t *Wq, const int64_t *Wk,
+                        const int64_t *Wv, const int64_t *Wp,
+                        const int64_t *bq, const int64_t *bk,
+                        const int64_t *bv, const int64_t *bp,
+                        int64_t *O, int64_t *tmp, int N, int D, int heads) {
+    int h, i, d, hd = D / heads;
+    int64_t *Q = tmp;                    /* N*D */
+    int64_t *K = Q + N * D;              /* N*D */
+    int64_t *V = K + N * D;              /* N*D */
+    int64_t *Oc = V + N * D;             /* N*D concat */
+    int64_t *hq = Oc + N * D;            /* N*hd */
+    int64_t *hk = hq + N * hd;           /* N*hd */
+    int64_t *hv = hk + N * hd;           /* N*hd */
+    int64_t *ho = hv + N * hd;           /* N*hd */
+    int64_t *S = ho + N * hd;            /* N*N */
+    int64_t *NUM = S + N * N;            /* N*N */
+    int64_t *DEN = NUM + N * N;          /* N */
+    nn_linear_fixed(X, Wq, bq, Q, N, D, D);
+    nn_linear_fixed(X, Wk, bk, K, N, D, D);
+    nn_linear_fixed(X, Wv, bv, V, N, D, D);
+    for (h = 0; h < heads; h++) {
+        for (i = 0; i < N; i++)
+            for (d = 0; d < hd; d++) {
+                hq[i * hd + d] = Q[i * D + h * hd + d];
+                hk[i * hd + d] = K[i * D + h * hd + d];
+                hv[i * hd + d] = V[i * D + h * hd + d];
+            }
+        nn_attn_scores(hq, hk, S, N, hd);
+        nn_softmax_rows(S, NUM, DEN, N, N);
+        nn_attn_av(NUM, DEN, hv, ho, N, N, hd);
+        for (i = 0; i < N; i++)
+            for (d = 0; d < hd; d++)
+                Oc[i * D + h * hd + d] = ho[i * hd + d];
+    }
+    nn_linear_fixed(Oc, Wp, bp, O, N, D, D);
+}

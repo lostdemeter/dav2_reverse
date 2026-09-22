@@ -14,7 +14,7 @@ comments only), plus offline generators whose floats never ship.
 | fib_dot (exact counts + wide solve) | `fib_solve.c` | theory §11 shootout | corr 0.999846 |
 | fixed_dot, rescale, head_fixed | `fixed_nn.c` | `fixed_dot_terms`, `_to_common_scale`, `_head_fixed_pixel` | bit-exact 0/64 |
 | linear, layernorm, GELU-vec | `fixed_nn.c` | `int_linear_fixed`, `int_layernorm_affine`, `int_gelu_fixed` | bit-exact (incl. 384-wide) |
-| attention composition | — | `int_attention_fixed` | open (kernels exist, composition unwired) |
+| attention composition | `fixed_nn.c` | `int_attention_fixed` | bit-exact 0/3072 (real layer0 W, N=8) |
 
 Portability note: the one trap is floor semantics — Python `//`/`>>`
 round toward −inf, C truncates. Every negative-capable site uses

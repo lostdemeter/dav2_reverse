@@ -758,3 +758,37 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   leanness stays where earned (EXP-halving 544kB, C kernel, 125B
   head, per-layer codebook as evidence). This is a result, not a
   defeat: first measured irreducibility map of a DAV2 replica.
+
+## 2026-09-22 — PRE-REGISTERED: integer attention composition in C
+
+- Open row in c_port/README (kernels exist, composition unwired):
+  add nn_attn_scores + nn_softmax_rows + nn_attn_av +
+  nn_attention_fixed to fixed_nn.{h,c} mirroring geo_int's
+  int_attention_fixed body op-for-op (floor_div128 at the two
+  negative-capable sites: (dot+2^13)>>14 and //8; den==0 guard).
+- Vectors: softmax-rows vs G.int_softmax_fixedvals EXACT (random +
+  wide-spread clipping + constant rows); attention end-to-end vs
+  G.int_attention_fixed EXACT (real baked layer0 W, realistic random
+  X N=8). Scores/av covered by end-to-end bit-exactness (stated, not
+  hidden — no exact standalone fns exist for them).
+- Predictions: 0 mismatches on softmax first run (pure LUT path);
+  1-2 floor-trap iterations on scores/av composition before green
+  (the //8 and (acc+HALF)>>F sites on negative dots). Zero-float
+  grep stays clean; make test green before any claim.
+
+## 2026-09-22 — OUTCOME: integer attention wired in C, bit-exact
+
+- `nn_attn_scores` + `nn_softmax_rows` + `nn_attn_av` +
+  `nn_attention_fixed` in fixed_nn.{h,c}; `make test` green
+  (softmax 0/150, attention 0/3072 on real baked layer0 W, N=8;
+  full suite ALL PASS incl. prior kernels). Zero-float grep clean.
+- Two bugs, both harness-side on first run, stated: (1) test used
+  6x24 rows against a square-assumed kernel — generalized kernel to
+  (rows,cols); (2) per-row av call passed rows=1 as the reduction
+  length (computed 1 of 8 terms) — changed to per-row DEN array,
+  one call. Q/scores intermediates verified equal before the fix
+  localized it past softmax. Prediction score: softmax-first-try
+  wrong (shape bug, not floor trap), floor sites correct as written.
+- Thread 1 of the closing program DONE. Remaining: fixed-point
+  sensor path, upstream PR, bigger co-search arena, substrate
+  experiment, 5 empty strata.

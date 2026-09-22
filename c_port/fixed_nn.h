@@ -58,4 +58,42 @@ void nn_layernorm_fixed(const int64_t *X, const int64_t *w, const int64_t *b,
 /* Integer GELU over vector (bounded LUT + asymptotes). Mirrors int_gelu_fixed. */
 void nn_gelu_vec(const int32_t *X, int32_t *Y, int n);
 
+/* Attention pieces (all fixed 2^-14 unless noted). Mirror the body of
+ * geo_int.int_attention_fixed op-for-op; floor sites noted per kernel.
+ * Bounds: N<=512 tokens, D<=1536, heads divide D; accumulators wrap
+ * mod 2^64 exactly like numpy int64 (uint64_t), final quotients use
+ * __int128 (safe while N * term^2 < 2^126). */
+
+/* Per-head scores: S = floor((Q@K.T + 2^13)/2^14) then floor(/8).
+ * Q,K:(N,hd) -> S:(N,N). Mirrors the two floor sites in
+ * int_attention_fixed (numpy >> and // both floor). */
+void nn_attn_scores(const int64_t *Q, const int64_t *K,
+                    int64_t *S, int N, int hd);
+
+/* Row-wise stable softmax: dd = clip(rowmax - q, 0, 262144),
+ * NUM = PHI_EXP_LUT[dd] (2^24 scale), DEN = sum. Mirrors
+ * int_softmax_fixedvals exactly (incl. den==0 -> 1 guard).
+ * Rectangular (rows x cols); attention use is square. */
+void nn_softmax_rows(const int64_t *S, int64_t *NUM, int64_t *DEN,
+                     int rows, int cols);
+
+/* attn@V: O = floor((NUM@V)/den) per row. NUM:(rows,terms),
+ * DEN:(rows) one den per row, V:(terms,hd), O:(rows,hd).
+ * Mirrors (num@v)//den (numpy // floors). */
+void nn_attn_av(const int64_t *NUM, const int64_t *DEN, const int64_t *V,
+                int64_t *O, int rows, int terms, int hd);
+
+/* Full 6-head (param: heads) attention: QKV via nn_linear_fixed,
+ * per-head scores/softmax/av, concat, proj. X,O:(N,D).
+ * Wq/Wk/Wv/Wp:(D,D), bq/bk/bv/bp:(D). tmp: caller workspace of
+ * NN_ATTN_TMP(N,D,heads) int64s. Mirrors int_attention_fixed. */
+#define NN_ATTN_TMP(N, D, H) \
+    ((4 * (N) * (D)) + (4 * (N) * ((D) / (H))) + (2 * (N) * (N) + (N)))
+void nn_attention_fixed(const int64_t *X,
+                        const int64_t *Wq, const int64_t *Wk,
+                        const int64_t *Wv, const int64_t *Wp,
+                        const int64_t *bq, const int64_t *bk,
+                        const int64_t *bv, const int64_t *bp,
+                        int64_t *O, int64_t *tmp, int N, int D, int heads);
+
 #endif

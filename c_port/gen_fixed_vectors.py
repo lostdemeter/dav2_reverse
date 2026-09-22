@@ -129,6 +129,37 @@ def main():
     YG = G.int_gelu_fixed(XG)
     parts += [emit_arr('GE_X', XG, 'int32_t'), emit_arr('GE_Y', YG, 'int64_t')]
 
+    # 5. softmax rows: exact G.int_softmax_fixedvals (varied spreads,
+    # wide outlier -> EXP clip path, constant row)
+    NS, NN = 6, 24
+    SQ = (rng.standard_normal((NS, NN)) * 2**18).astype(np.int64)
+    SQ[3] = (rng.standard_normal(NN) * 2**22).astype(np.int64)
+    SQ[3, 0] += 1 << 24  # outlier forces clipping on this row
+    SQ[4] = 7 * 2**14    # constant row -> uniform
+    SNUM, SDEN = G.int_softmax_fixedvals(SQ)
+    parts += [f'#define SM_N {NS}', f'#define SM_M {NN}',
+              emit_arr('SM_S', SQ, 'int64_t'),
+              emit_arr('SM_NUM', SNUM, 'int64_t'),
+              emit_arr('SM_DEN', SDEN, 'int64_t')]
+
+    # 6. attention end-to-end: exact G.int_attention_fixed on REAL baked
+    # layer0 weights + realistic random tokens (N=8, D=384, heads=6)
+    AN, AD, AH = 8, 384, 6
+    W = G.bake_layer_fixed(REPO / 'weights' / 'geometric_backbone.npz', 0)
+    AX = (rng.standard_normal((AN, AD)) * 2**16).astype(np.int64)
+    AO = G.int_attention_fixed(AX, W, heads=AH)
+    parts += [f'#define AN_N {AN}', f'#define AN_D {AD}', f'#define AN_H {AH}',
+              emit_arr('AN_X', AX, 'int64_t'),
+              emit_arr('AN_WQ', W['q.weight'], 'int64_t'),
+              emit_arr('AN_WK', W['k.weight'], 'int64_t'),
+              emit_arr('AN_WV', W['v.weight'], 'int64_t'),
+              emit_arr('AN_WP', W['proj.weight'], 'int64_t'),
+              emit_arr('AN_BQ', W['q.bias'], 'int64_t'),
+              emit_arr('AN_BK', W['k.bias'], 'int64_t'),
+              emit_arr('AN_BV', W['v.bias'], 'int64_t'),
+              emit_arr('AN_BP', W['proj.bias'], 'int64_t'),
+              emit_arr('AN_O', AO, 'int64_t')]
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text('\n\n'.join(parts) + '\n')
     print(f'wrote {OUT}')

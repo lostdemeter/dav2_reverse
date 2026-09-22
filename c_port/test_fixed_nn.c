@@ -109,6 +109,32 @@ int main(void) {
         printf("gelu mismatches: %d/256\n", mism);
     }
 
+    /* 7. softmax rows bit-exact (incl. clip + uniform rows) */
+    {
+        int mism = 0, k;
+        int64_t NUM[SM_N * SM_M], DEN[SM_N];
+        nn_softmax_rows(SM_S, NUM, DEN, SM_N, SM_M);
+        for (k = 0; k < SM_N * SM_M; k++) if (NUM[k] != SM_NUM[k]) mism++;
+        for (k = 0; k < SM_N; k++) if (DEN[k] != SM_DEN[k]) mism++;
+        CHECK(mism == 0, "softmax_rows mismatches=%d/%d", mism,
+              SM_N * SM_M + SM_N);
+        printf("softmax_rows mismatches: %d/%d\n", mism, SM_N * SM_M + SM_N);
+    }
+
+    /* 8. attention end-to-end bit-exact (real layer0 weights, N=8).
+     * Scores/av have no standalone exact fns; covered here end-to-end. */
+    {
+        int mism = 0, k;
+        static int64_t O[AN_N * AN_D];
+        static int64_t TMP[NN_ATTN_TMP(AN_N, AN_D, AN_H)];
+        nn_attention_fixed(AN_X, AN_WQ, AN_WK, AN_WV, AN_WP,
+                           AN_BQ, AN_BK, AN_BV, AN_BP,
+                           O, TMP, AN_N, AN_D, AN_H);
+        for (k = 0; k < AN_N * AN_D; k++) if (O[k] != AN_O[k]) mism++;
+        CHECK(mism == 0, "attention mismatches=%d/%d", mism, AN_N * AN_D);
+        printf("attention mismatches: %d/%d\n", mism, AN_N * AN_D);
+    }
+
     if (fails == 0) printf("C FIXED-NN: ALL PASS\n");
     else printf("C FIXED-NN: %d FAILURES\n", fails);
     return fails != 0;
