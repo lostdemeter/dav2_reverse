@@ -740,3 +740,21 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   parity); 25% collapses (<0.9). Dense-core sensitivity from the
   codebook axis says small weights matter. If 5% HOLDS parity it is
   the first structural win and goes to the gate immediately.
+
+## 2026-09-22 — OUTCOME: sparsity dead at 5%; all four axes closed
+
+- Structured sparsity: 5% rows zeroed -> mean 0.28 (0/6); 10% 0.06;
+  25% 0.12. The "5% ~0.99" prediction fails hard — even the weakest
+  neurons are load-bearing. No structural redundancy at row grain.
+- Weight-pathway program, final ledger:
+  codebook ~0.9988 near-miss (stacking candidate only) · low-rank
+  DEAD (full-rank spectra) · sparsity DEAD at 5% · sharing DEAD for
+  MLP offline (0.18), weak-moderate for attention (0.35, won't carry
+  parity — no probe spent, stated).
+- Thesis verdict: the backbone is IRREDUCIBLE at every granularity
+  tried (blocks, heads, gains, precision, direction, rows,
+  cross-layer). Matches all prior coarse searches (24/24 drops fail,
+  72/72 heads fail). The "leanest backbone" line is closed; won
+  leanness stays where earned (EXP-halving 544kB, C kernel, 125B
+  head, per-layer codebook as evidence). This is a result, not a
+  defeat: first measured irreducibility map of a DAV2 replica.
