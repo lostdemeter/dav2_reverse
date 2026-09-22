@@ -32,9 +32,9 @@ LATE_LR = float(__import__('os').environ.get('STUDENT_LATE_LR', '1e-6'))
 MAPS = ("q.weight", "k.weight", "v.weight", "proj.weight",
         "mlp1.weight", "mlp2.weight")
 LABEL_CACHE = ADAPT / 'runs' / 'grad_labels.npz'
-BEST = (ADAPT / 'runs' /
-        f'student_grad_best_r{RANK}'
-        f'{"_ul" + "-".join(map(str, LATE_LAYERS)) if LATE_LAYERS else ""}.pt')
+BEST_STEM = (f'student_grad_best_r{RANK}'
+               f'{"_ul" + "-".join(map(str, LATE_LAYERS)) if LATE_LAYERS else ""}')
+BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
 class StudentBackbone:
@@ -296,6 +296,9 @@ def main():
     opt = torch.optim.Adam(groups)
     sched = (torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
              if args.schedule == 'cosine' else None)
+    global BEST
+    if args.schedule == 'cosine':
+        BEST = ADAPT / 'runs' / (BEST_STEM + '_cos.pt')
     best, best_state = -1.0, None
 
     from geo_neck import GeometricNeck
