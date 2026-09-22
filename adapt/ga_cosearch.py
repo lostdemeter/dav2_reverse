@@ -65,6 +65,11 @@ def main():
                     help="self-dissolving structures: every K gens, re-derive "
                          "groups from measured co-success via learn_groups and "
                          "adopt them if they differ (0=off, fixed groups)")
+    ap.add_argument('--regroup-min-n', type=int, default=20,
+                    help="evidence guard: minimum top-half histories before "
+                         "any dissolution is adopted")
+    ap.add_argument('--regroup-mi-floor', type=float, default=0.05,
+                    help="evidence guard: minimum best-pair MI for adoption")
     args = ap.parse_args()
 
     import torch
@@ -182,22 +187,32 @@ def main():
             children.append(child)
             visited.add(S.joint_identifier(child))
         pop = elites + children
-        # Self-dissolving structures: re-derive groups from measured
-        # co-success and adopt on difference, with the evidence logged.
+        # Self-dissolving structures with evidence guard: re-derive groups
+        # from measured co-success; adopt ONLY if should_regroup passes
+        # (min histories + MI floor + real difference). Skips are logged —
+        # a refused dissolution is evidence, not silence.
         if args.regroup and (gen + 1) % args.regroup == 0:
             hist = [({**v[5], **v[6]}, v[2][0], v[2][1]) for v in cache.values()]
             prop = S.learn_groups(hist)
-            new_groups = [tuple(g) for g in prop["groups"]]
-            if {frozenset(g) for g in new_groups} != {frozenset(g) for g in cur_groups}:
+            adopt, why = S.should_regroup(
+                prop, cur_groups, min_n=args.regroup_min_n,
+                mi_floor=args.regroup_mi_floor)
+            if adopt:
                 regroup_events.append(
                     {"gen": gen, "from": [list(g) for g in cur_groups],
-                     "to": [list(g) for g in new_groups],
-                     "mi": prop["top_mi_pairs"], "n_top": prop["n_top"]})
-                cur_groups = new_groups
+                     "to": [list(g) for g in prop["groups"]],
+                     "mi": prop["top_mi_pairs"], "n_top": prop["n_top"],
+                     "why": why})
+                cur_groups = [tuple(g) for g in prop["groups"]]
                 print(f"gen {gen}: REGROUP "
                       f"{regroup_events[-1]['from']} -> "
-                      f"{regroup_events[-1]['to']} "
-                      f"(MI {prop['top_mi_pairs'][:2]})", flush=True)
+                      f"{regroup_events[-1]['to']} ({why})", flush=True)
+            else:
+                regroup_events.append(
+                    {"gen": gen, "from": [list(g) for g in cur_groups],
+                     "to": None, "mi": prop["top_mi_pairs"],
+                     "n_top": prop["n_top"], "why": "skip: " + why})
+                print(f"gen {gen}: regroup skipped ({why})", flush=True)
 
     dt = time.perf_counter() - t0
     results = [evaluate(g) for g in pop]

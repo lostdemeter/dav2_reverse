@@ -241,5 +241,22 @@ check(all(bb2.check(t) for t in tokens) and bb2.count == 200,
       "bloom save/load round-trips")
 est = bb2.estimated_count()
 check(abs(est - 200) / 200 < 0.25, f"bloom cardinality estimate {est:.0f} ~= 200")
+
+from styles import should_regroup
+rich = {"groups": [["a", "b"], ["c"]], "n_top": 30,
+        "top_mi_pairs": [[["a", "b"], 0.374], [["c", "d"], 0.01]]}
+cur = [("a",), ("b",), ("c",)]
+ok, reason = should_regroup(rich, cur)
+check(ok, f"guard adopts on strong evidence ({reason})")
+thin = dict(rich, n_top=11)
+ok, reason = should_regroup(thin, cur)
+check(not ok and "thin evidence" in reason,
+      "guard refuses thin histories (the gen-2 failure mode)")
+weak = dict(rich, top_mi_pairs=[[["a", "b"], 0.01]])
+ok, reason = should_regroup(weak, cur)
+check(not ok and "weak signal" in reason, "guard refuses weak MI")
+same = dict(rich, groups=[["a"], ["b"], ["c"]])
+ok, reason = should_regroup(same, [("a",), ("b",), ("c",)])
+check(not ok and "matches current" in reason, "guard skips no-op regroups")
 print("SMOKE:", "PASS" if fails == 0 else "FAIL")
 raise SystemExit(1 if fails else 0)

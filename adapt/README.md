@@ -97,6 +97,10 @@ dissolution on ~11-sample histories churns good structure (gen-2
 regroups shatter into singletons). Lesson: dissolution needs a
 minimum-evidence guard; strong pairs ([readout,taps],
 [res_scales,tap_gains]) survive most events regardless.
+`--regroup-min-n` / `--regroup-mi-floor` implement the guard
+(`should_regroup`, smoke-tested): guarded 2/3 (13, 16), refusals
+logged; min-n 8 fires a real adoption at gen 11 without breaking
+anything. Thresholds on measured evidence, all the way down.
 
 Fixtures (`adapt/fixtures/`, gitignored): 6 exploration + 4 gate scenes,
 3 retention anchors (gradient/checker/disc), 4 sealed audit scenes, all

@@ -3,6 +3,30 @@
 Working log for the experimental branch. Kept because several findings
 generalize to adaptation_foundry as a library (flagged LIBRARY below).
 
+## 2026-09-21 — guard tested: refusal restores parity, adoption fires clean
+
+- `should_regroup` (min histories + MI floor + real-difference) unit-tested
+  (4 smoke checks) and wired in (`--regroup-min-n`, `--regroup-mi-floor`).
+- Scoreboard, 3 seeds each: STATIC 2/3 (13, 16) · UNGUARDED-REGROUP 1/3
+  (17) · GUARDED-REGROUP 2/3 (13, 16). The guard hypothesis is confirmed
+  in the precise predicted form: refusals at gen 2/5 (n_top 4-7 < 20),
+  performance restored to static level. No better, no worse — the guard
+  prevents harm; it doesn't create wins.
+- Min-n 8 variant (seed 2, 14 gens): adoption FIRED at gen 11
+  (n_top=8, MI 0.142) — and again the strong pairs ([readout,taps],
+  [res_scales,tap_gains]) survived dissolution intact. The hit (gen 7,
+  13 evals) preceded adoption; adoption neither caused nor broke it
+  (5 holders, 4 under bytes at close). Third replication of the same
+  pattern: the grouping signal is real, the adoption policy is what
+  needs the threshold.
+- On the fundamental-truth question: three levels now show the same
+  shape — verdicts needed calibrated bars, dissolution needed evidence
+  floors, and in both cases the unguarded variant failed in exactly the
+  predicted way while the guarded variant restored parity. Coincidence
+  twice is interesting; three times with a mechanism (thresholds on
+  measured evidence) is a pattern with a name: legibility all the way
+  down. Still not proof — but no longer a single anecdote either.
+
 ## 2026-09-21 — self-dissolving groups: mechanism works, verdict negative
 
 - Built: `--regroup K` re-derives groups from measured co-success via

@@ -404,3 +404,24 @@ def learn_groups(history, n_groups=4, top_frac=0.5, alpha=1.0):
     topp = sorted(mi.items(), key=lambda kv: -kv[1])[:6]
     return {"groups": groups, "converged": converged, "n_top": len(top),
             "top_mi_pairs": [(list(k), round(v, 3)) for k, v in topp]}
+
+
+def should_regroup(prop, cur_groups, min_n=20, mi_floor=0.05):
+    """Evidence guard for self-dissolution (the legibility threshold).
+
+    Adopt proposed groups only if (a) enough measured histories back
+    them (prop['n_top'] >= min_n) and (b) the strongest co-success
+    signal clears mi_floor. Returns (adopt: bool, reason: str).
+    Skips are logged by the caller — a refused dissolution is evidence,
+    not silence.
+    """
+    if prop["n_top"] < min_n:
+        return False, (f"thin evidence: n_top={prop['n_top']} < {min_n}")
+    best_mi = max((v for _, v in prop["top_mi_pairs"]), default=0.0)
+    if best_mi < mi_floor:
+        return False, f"weak signal: best MI {best_mi:.3f} < {mi_floor}"
+    new_groups = [tuple(g) for g in prop["groups"]]
+    if {frozenset(g) for g in new_groups} == {frozenset(g) for g in cur_groups}:
+        return False, "proposal matches current groups"
+    return True, (f"adopt: n_top={prop['n_top']}, "
+                  f"best MI {best_mi:.3f} >= {mi_floor}")
