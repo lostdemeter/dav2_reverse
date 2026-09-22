@@ -239,13 +239,24 @@ def main():
     opt = torch.optim.Adam(student.parameters(), lr=args.lr)
     best, best_state = -1.0, None
 
+    from geo_neck import GeometricNeck
+    from depth_adapter import ScaledNeckMixin
+
+    class _Neck(ScaledNeckMixin, GeometricNeck):
+        pass
+
+    _neck = _Neck(device=device)
+    _neck._w = shared['neck_w']
+    _neck.buffers_loaded = True
+    _neck.res_scales = [0, 0, 0, 0]
+
     def gate(tag):
         cs = []
         for rgb, ref, cid in eval_scenes:
             fmaps, ph, pw = student.forward_backbone(
                 shared['preprocess'](rgb).to(device))
             with torch.no_grad():
-                fused = shared['neck'](fmaps)
+                fused = _neck(fmaps)
                 d = shared['head']([fused[3]], ph, pw).squeeze(0).cpu().numpy()
             cs.append(_corr(d, ref))
         mean, mn = float(np.mean(cs)), float(min(cs))
@@ -258,7 +269,7 @@ def main():
     import PIL.Image as _I
     gate("init")
     rng = np.random.default_rng(0)
-    Y = torch.from_numpy(labels).to(device).unsqueeze(1)  # (N,1,518,518)
+    Y = torch.from_numpy(labels).to(device)  # (N,518,518), no channel dim
     n = len(fit_pairs)
     for ep in range(args.epochs):
         perm = rng.permutation(n)
@@ -273,8 +284,8 @@ def main():
             pv = torch.stack(pvs).to(device)
             tgt = Y[idx]
             fmaps, ph, pw = student.forward_backbone(pv)
-            fused = shared['neck'](fmaps)
-            pred = shared['head'](fused, ph, pw)
+            fused = _neck(fmaps)
+            pred = shared['head']([fused[3]], ph, pw)
             loss, mae, gm = ssi_gm_loss(pred, tgt)
             opt.zero_grad()
             loss.backward()
