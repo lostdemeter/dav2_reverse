@@ -1144,6 +1144,19 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   continue up; ~0.993 -> not capacity -> schedule/data/unfreeze
   next. Narrow-early NOT retired (untried capacity gradient).
 
+## 2026-09-22 — OUTCOME: capacity refuted (192 < 128 held-out); overfit diagnosed
+
+- Rank-192: best 0.98979 (ep84) vs rank-128's 0.99276 — MORE
+  capacity, LOWER train loss, WORSE held-out. Classic overfit
+  (2.6M+ params / 191 scenes; 128-run train fell while held-out
+  peaked ep29). Capacity gradient inverted under gradients, same
+  pattern as the L-gradient inversion. Not capacity.
+- Next variable: DATA (diagnosed cause, not a guess). Extend
+  fit_pool to ~500 scenes (cheap streaming + oracle), retrain
+  rank-128 identical protocol. Pre-registered: >=0.998 ->
+  data story confirmed, continue scaling; ~0.993 again -> not
+  data -> schedule (cosine) then rank-64 then unfreeze, in order.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
