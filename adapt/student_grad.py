@@ -24,6 +24,9 @@ import copy
 RANK = int(__import__('os').environ.get('STUDENT_RANK', '128'))
 STUDENT_LAYERS = (0, 1, 2)
 RANDOM_INIT = __import__('os').environ.get('STUDENT_RANDOM_INIT', '') == '1'
+# Full-width mode: direct (W,b) Parameters per map, teacher-exact init.
+# No bottleneck, no RRR — isolates narrowing-vs-training causally.
+FULLWIDTH = __import__('os').environ.get('STUDENT_FULLWIDTH', '') == '1'
 # Deep supervision: student L0-2 layer-outs vs teacher layer-outs
 # (online teacher forward, no_grad), variance-normalized MSE x lambda.
 # 0 = off (legacy depth-only loss).
@@ -40,7 +43,8 @@ LABEL_CACHE = ADAPT / 'runs' / 'grad_labels.npz'
 BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{"_ul" + "-".join(map(str, LATE_LAYERS)) if LATE_LAYERS else ""}'
                f'{"_rand" if RANDOM_INIT else ""}'
-               f'{f"_ds{DEEPSUP:g}" if DEEPSUP > 0 else ""}')
+               f'{f"_ds{DEEPSUP:g}" if DEEPSUP > 0 else ""}'
+               f'{"_fw" if FULLWIDTH else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -82,17 +86,40 @@ class StudentBackbone:
                     Wp = torch.nn.Parameter(W)
                     bp = torch.nn.Parameter(b) if b is not None else None
                     self.late[(li, m)] = (Wp, bp)
+        # Full-width direct maps (causal-isolation mode): teacher-exact.
+        self.full = {}
+        if FULLWIDTH:
+            with torch.no_grad():
+                for li in STUDENT_LAYERS:
+                    for m in MAPS:
+                        W = teacher._w[f'layer{li}.{m}'].detach().clone()
+                        bkey = f'layer{li}.{m.replace(".weight", ".bias")}'
+                        b = (teacher._w[bkey].detach().clone()
+                             if bkey in teacher._w else None)
+                        self.full[(li, m)] = (
+                            torch.nn.Parameter(W),
+                            torch.nn.Parameter(b) if b is not None else None)
+            print("FULLWIDTH mode (teacher-exact init, no bottleneck)",
+                  flush=True)
 
     def parameters(self):
-        return [p for tup in self.factors.values() for p in tup]
+        ps = [p for tup in self.factors.values() for p in tup]
+        if FULLWIDTH:
+            ps = [p for tup in self.full.values() for p in tup
+                  if p is not None]
+        return ps
 
     def late_parameters(self):
         return [p for tup in self.late.values() for p in tup
                 if p is not None]
 
     def rrr_init(self, covs):
-        """Init factors from RRR solutions (skipped when RANDOM_INIT)."""
+        """Init factors from RRR solutions (skipped when RANDOM_INIT
+        or FULLWIDTH — the latter is teacher-exact by construction)."""
         import torch
+        if FULLWIDTH:
+            print("FULLWIDTH: teacher-exact init, RRR skipped", flush=True)
+            return
         if RANDOM_INIT:
             with torch.no_grad():
                 for (li, m), (A, B, b) in self.factors.items():
@@ -135,6 +162,9 @@ class StudentBackbone:
             import re
             m = re.match(r'layer(\d+)\.(q|k|v|proj|mlp1|mlp2)\.weight', name)
             if m and int(m.group(1)) in STUDENT_LAYERS:
+                if FULLWIDTH:
+                    return self.full[(int(m.group(1)),
+                                      m.group(2) + '.weight')][0]
                 A, B, b = self.factors[(int(m.group(1)),
                                         m.group(2) + '.weight')]
                 return B @ A
@@ -143,8 +173,14 @@ class StudentBackbone:
                                   m.group(2) + '.weight')][0]
             m = re.match(r'layer(\d+)\.(q|k|v|proj|mlp1|mlp2)\.bias', name)
             if m and int(m.group(1)) in STUDENT_LAYERS:
-                return self.factors[(int(m.group(1)),
-                                     m.group(2) + '.weight')][2]
+                if FULLWIDTH:
+                    fb = self.full[(int(m.group(1)),
+                                    m.group(2) + '.weight')][1]
+                    if fb is not None:
+                        return fb
+                else:
+                    return self.factors[(int(m.group(1)),
+                                         m.group(2) + '.weight')][2]
             if m and int(m.group(1)) in LATE_LAYERS:
                 late_b = self.late[(int(m.group(1)),
                                     m.group(2) + '.weight')][1]
@@ -402,7 +438,11 @@ def main():
                 late_state = {k: tuple(p.detach().cpu().clone() for p in tup
                                        if p is not None)
                               for k, tup in student.late.items()}
+                full_state = {k: tuple(p.detach().cpu().clone() for p in tup
+                                       if p is not None)
+                              for k, tup in student.full.items()}
                 torch.save({"factors": best_state, "late": late_state,
+                            "full": full_state,
                             "mean_corr": best, "rank": RANK,
                             "layers": STUDENT_LAYERS,
                             "late_layers": LATE_LAYERS}, BEST)

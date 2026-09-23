@@ -33,6 +33,9 @@ def main():
     if _m2:
         import os as _os
         _os.environ['STUDENT_UNFREEZE'] = _m2.group(1).replace('-', ',')
+    if '_fw' in _ckpt_path.name:
+        import os as _os
+        _os.environ['STUDENT_FULLWIDTH'] = '1'
     from student_grad import StudentBackbone
     device = torch.device('cuda')
     shared = load_shared(device)
@@ -60,6 +63,15 @@ def main():
             if Wp is None:
                 print(f"  WARNING: ckpt late {(li, m)} not in student "
                       f"(env STUDENT_UNFREEZE mismatch?)", flush=True)
+                continue
+            Wp.copy_(tup[0].to(device))
+            if bp is not None and tup[1] is not None:
+                bp.copy_(tup[1].to(device))
+        for (li, m), tup in ckpt.get('full', {}).items():
+            Wp, bp = student.full.get((li, m), (None, None))
+            if Wp is None:
+                print(f"  WARNING: ckpt full {(li, m)} not in student",
+                      flush=True)
                 continue
             Wp.copy_(tup[0].to(device))
             if bp is not None and tup[1] is not None:

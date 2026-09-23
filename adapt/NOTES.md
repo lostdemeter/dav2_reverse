@@ -1291,6 +1291,20 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   the name: full-early-width student (concede narrowing), or
   accept ~0.996.
 
+## 2026-09-23 — PRE-REGISTERED: full-width student (causal isolation)
+
+- Design: L0-2 FULL direct maps as Parameters (teacher-exact
+  init — no bottleneck, no RRR), rest frozen; same labels,
+  loss, protocol, gates. Asks the causal question the whole
+  program has circled: is the 0.996 gap narrowing capacity or
+  the training itself?
+- Predictions: HOLDS >=0.999 (pipeline sound; gap = narrowing
+  capacity, isolated cleanly — the geometric account closes:
+  rank-deficiency in early maps is THE mechanism). DROPS to
+  ~0.996 too -> training-limited (loss/data/pipeline), rethink
+  everything — narrowing exonerated, bigger finding.
+- Either outcome is decisive; that is the point of the run.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
