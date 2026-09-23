@@ -1220,6 +1220,20 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   Decision point: spend two more runs, or accept 0.996 and move
   the program to full-early-width / phi-encode-best.
 
+## 2026-09-23 — OUTCOME ladder (both cheap runs done, for completeness)
+
+- Cosine r128: best ep89 0.99624 (16/54), train loss 0.041 (vs
+  0.086 const) — fits train much harder, lifts held-out +0.0003.
+  Crosses the 0.996 line by 2.4e-4. Best narrow-early number in
+  program history; still 0.003 from hold.
+- Rank-64 const: best ep79 0.99256, late degradation (min 0.789
+  at ep74) — capacity floor confirmed from below (single-layer
+  E@96 sat ~0.99, but 3-layer @64 compounds worse than @128).
+- Ladder CLOSED. Narrow-early ceiling: 0.9962 (cosine). Seven
+  interventions total; none reach 0.999. Standing decision:
+  accept ~0.996 as the narrow-early result (bank depth-graded
+  prior + RRR-init hybrid), or full-early-width student next.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
