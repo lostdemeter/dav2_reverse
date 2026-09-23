@@ -1243,6 +1243,19 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   SYNTHETIC activations per map (L0-2). Predicts synth residual
   >> real residual (mechanism for E0T0L0V0 failures). If equal,
   coverage-in-activation-space is dead as a mechanism.
+
+## 2026-09-23 — OUTCOME (b): bases span synth fine; mechanism dead
+
+- L0 real/synth residuals near-identical (q 0.0031/0.0030, v
+  0.033/0.035, mlp2 0.095/0.114); L1/L2 mixed, mostly <1.5x,
+  inconsistent direction (L1-mlp2 BETTER on synth 0.155 vs
+  0.205). Predicted strong synth>>real effect ABSENT.
+- E0T0L0V0 failures are NOT poor fits on synth tokens — bases
+  cover them. Residual suspects: error AMPLIFICATION through
+  frozen late layers on smooth scenes, or corr-denominator
+  sensitivity on low-variance refs. Both live downstream of the
+  fit, consistent with deep supervision (c) still being the live
+  basin-breaker.
 - (a) Random-init run: proper small-random factors (NOT the
   dead A=0 default), same protocol. Lands >=0.994 -> no trap,
   gradients do the work, RRR-init unremarkable. Lands <=0.97 ->
