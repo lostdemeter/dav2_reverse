@@ -28,6 +28,10 @@ MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
+def pre0(shared, rgb):
+    return shared['preprocess'](rgb)
+
+
 def pick_channels(shared, device, n_mlp=3):
     """High-variance L0 post-GELU channels on 3 real scenes."""
     import torch
@@ -47,14 +51,23 @@ def pick_channels(shared, device, n_mlp=3):
     return [int(c) for c in order[:n_mlp]]
 
 
-def synth_channel(shared, device, kind, ch, steps):
+def init_is_tensor(x):
+    import torch
+    return isinstance(x, torch.Tensor)
+
+
+def synth_channel(shared, device, kind, ch, steps, init=None, lr=LR):
     """Maximize mean activation of (kind, ch) over non-CLS tokens."""
     import torch
     bb = shared['backbone']
     torch.manual_seed(0)
-    img = torch.zeros(1, 3, 518, 518, device=device)  # = mean after norm
-    img.requires_grad_(True)
-    opt = torch.optim.Adam([img], lr=LR)
+    if init is None:
+        img = torch.zeros(1, 3, 518, 518, device=device)  # = mean after norm
+    else:
+        img = init.clone().detach().to(device).requires_grad_(True)
+    if not init_is_tensor(init):
+        img.requires_grad_(True)
+    opt = torch.optim.Adam([img], lr=lr)
     rng = np.random.default_rng(1)
     for s in range(steps):
         opt.zero_grad()
@@ -87,6 +100,9 @@ def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('--steps', type=int, default=NSTEPS)
+    ap.add_argument('--init', default='mean',
+                    help="'mean' or 'real:IDX' (COCO scene start)")
+    ap.add_argument('--lr', type=float, default=LR)
     args = ap.parse_args()
     import torch
     from run_search import load_shared
@@ -95,15 +111,24 @@ def main():
 
     targets = [('mlp', c) for c in pick_channels(shared, device)] + \
               [('attn', 0)]
-    print(f"targets: {targets}", flush=True)
+    print(f"targets: {targets} init={args.init} lr={args.lr}", flush=True)
+    init_pv = None
+    tag = "mean"
+    if args.init.startswith('real:'):
+        idx = int(args.init.split(':')[1])
+        zr = np.load(ADAPT / 'fixtures' / 'strata_real.npz', allow_pickle=True)
+        init_pv = pre0(shared,
+                       zr['rgb'][idx].astype(np.float32) / 255.0).to(device)
+        tag = f"real{idx}"
     outdir = ADAPT / 'runs' / 'actmax'
     outdir.mkdir(parents=True, exist_ok=True)
     from PIL import Image
     stims = {}
     for kind, ch in targets:
-        rgb, final = synth_channel(shared, device, kind, ch, args.steps)
+        rgb, final = synth_channel(shared, device, kind, ch, args.steps,
+                                   init=init_pv, lr=args.lr)
         Image.fromarray((rgb * 255).astype(np.uint8)).save(
-            outdir / f"{kind}{ch}.png")
+            outdir / f"{kind}{ch}_{tag}.png")
         stims[(kind, ch)] = (rgb, final)
         print(f"{kind}{ch}: final act={final:.4f}", flush=True)
 
