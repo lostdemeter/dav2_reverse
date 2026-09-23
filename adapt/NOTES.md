@@ -1601,3 +1601,22 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   -> target neurons -> synthesized stimuli -> re-fit -> gate).
   Mush/unselective -> pilot method insufficient, core-inputs
   question stays open.
+
+## 2026-09-23 — OUTCOME actmax: method insufficient (both configs fail)
+
+- Mean-init (LR 0.05): all stimuli converge to near-gray (±0.04),
+  drive targets at 0.2-0.3x of best-real. Under-movement (per-pixel
+  grads of a token-mean objective dilute ~1/1369; Adam can't
+  compensate from a flat start).
+- Real-init (LR 0.5, 300 steps): worse — 3/4 targets end BELOW
+  their starting image's activation (mlp378 final -0.08);
+  selectivity rows identical across stimuli (all runs hug the
+  shared init). Stochastic jitter + joint token competition
+  defeat naive ascent.
+- Per pre-registration: pilot method insufficient. Pixel-space
+  ascent on ViT without serious priors (Fourier/decorrelated
+  parameterization) is real engineering, not a pilot. Pivot
+  proposed: CORESET SELECTION instead — greedy forward selection
+  of the minimal real-scene subset identifying the maps
+  (covariances are additive, evaluation is tokcorr — answers
+  "core inputs" empirically with no synthesis).
