@@ -1305,6 +1305,34 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   everything — narrowing exonerated, bigger finding.
 - Either outcome is decisive; that is the point of the run.
 
+## 2026-09-23 — OUTCOME full-width: 0.99639, narrowing EXONERATED
+
+- Teacher-exact init 0.99998 (54/54) -> training DEGRADES it
+  (0.983 by ep9), oscillates 0.989-0.996, best ep14 0.99639.
+  Full capacity (5.3M free params) lands within 0.0002 of the
+  bottlenecked cosine best (0.99624). The bottleneck was NEVER
+  the binding constraint under gradient training.
+- Causal chain closed: not capacity (this run), not optimization
+  effort (cosine halves train loss, +0.0003 held-out), not
+  activation coverage (bases span synth fine), not drift penalty
+  (deep-sup same ceiling). Remaining: the SUPERVISION itself —
+  SSI aligns scale+shift per image (absolute geometry
+  unsupervised), 576 scenes underdetermine millions of params,
+  and the walk off the teacher manifold happens in
+  loss-invisible directions. Low-variance synth refs amplify
+  tiny absolute errors into corr failures.
+- The geometric account of why distillation works AT ALL here:
+  teacher early-layer activations are low-rank ON-MANIFOLD
+  (L0-Q effrank 27/384), so closed-form RRR projection loses
+  almost nothing (0.992 before epoch 0); late layers are
+  full-rank but gain-robust. Gradients polish (+0.004),
+  random-init stalls (0.77). Small nets aren't generally
+  capable — THIS teacher's early computation is approximately
+  low-rank on real data, and that is the whole ballgame.
+- Per prior agreement: bank-and-encode next (cosine r128
+  0.99624 best-mean; deep-sup 0.99619 best-floor — bank the
+  cosine artifact, note the floor).
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
