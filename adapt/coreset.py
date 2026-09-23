@@ -113,20 +113,24 @@ def main():
     import gc as _gc
     _gc.collect()
 
-    # probe tokens: 2 held-out reals (outside pool) + 1 synth
+    # probe tokens: 5 held-out reals (outside pool) + 2 synth.
+    # Harder probe than v1 (mean over 3 scenes saturated by step 3).
     npool = len(zf['rgb'])
-    h1 = zf['rgb'][npool - 2].astype(np.float32) / 255.0
-    h2 = zf['rgb'][npool - 1].astype(np.float32) / 255.0
-    fx = load_fixtures(include_audit=False)
-    probe_rgb = [h1, h2, fx['exploration'][2][0]]
+    probe_rgb = ([zf['rgb'][npool - 1 - i].astype(np.float32) / 255.0
+                  for i in range(5)] +
+                 [fx0 for fx0 in
+                  [load_fixtures(include_audit=False)['exploration'][2][0],
+                   load_fixtures(include_audit=False)['exploration'][4][0]]])
     print("probe tokens...", flush=True)
     P = {li: [] for li in LAYERS}
     for rgb in probe_rgb:
         for li, B in blk_of(rgb).items():
             P[li].append(B)
 
-    def score(idxs, solver):
-        tot, cnt = 0.0, 0
+    def score(idxs, solver, worst=False):
+        """Mean tokcorr (worst=True: min over map/scene cells — the
+        core criterion; v1's mean saturated by step 3)."""
+        cells = []
         for li in LAYERS:
             for nm, ik, tk, di, do in SP.MAPS:
                 W = solver(Sxx[li][nm][idxs].sum(axis=0),
@@ -136,44 +140,49 @@ def main():
                         [B[ik], np.ones((B[ik].shape[0], 1))], axis=1)
                     pr, tg = (X @ W).flatten(), B[tk].flatten()
                     c = float(np.corrcoef(pr, tg)[0, 1])
-                    tot += c if np.isfinite(c) else -1.0
-                    cnt += 1
-        return tot / cnt
+                    cells.append(c if np.isfinite(c) else -1.0)
+        return min(cells) if worst else sum(cells) / len(cells)
 
     rng = np.random.default_rng(0)
-    chosen, gains, cur = [], [], []
+    chosen, gains = [], []
     avail = list(range(len(pool_idx)))
+    prev = None
     for step in range(args.steps):
-        best, best_c, best_g = None, -2.0, 0.0
-        base = score(cur, ols) if cur else -1.0
+        best, best_c = None, -2.0
         for c in avail:
-            s = score(cur + [c], ols)
+            s = score(chosen + [c], ols, worst=True)
             if s > best_c:
                 best, best_c = c, s
-        best_g = best_c - base
+        gain = best_c - (prev if prev is not None else best_c)
+        prev = best_c
         chosen.append(best)
         avail.remove(best)
-        cur = list(chosen)
-        gains.append(best_g)
+        gains.append(gain)
         print(f"step {len(chosen)}: scene {pool_ids[best]} "
-              f"score={best_c:.5f} gain={best_g:+.5f}", flush=True)
+              f"worst={best_c:.5f} gain={gain:+.5f}", flush=True)
     print("selected:", [pool_ids[c] for c in chosen], flush=True)
 
-    # RRR-128 verify + random controls
+    # RRR-128 verify + random controls (worst-case + mean, both)
     def score_rrr(idxs):
         return score(idxs, lambda A, B: rrr(A, B, RANK))
 
-    g = score_rrr(chosen)
-    rs = []
+    def score_rrr_worst(idxs):
+        return score(idxs, lambda A, B: rrr(A, B, RANK), worst=True)
+
+    g, gw = score_rrr(chosen), score_rrr_worst(chosen)
+    rs, rsw = [], []
     for t in range(3):
         r = sorted(rng.choice(len(pool_idx), len(chosen),
                               replace=False).tolist())
         rs.append(score_rrr(r))
-    print(f"greedy RRR={g:.5f} random RRR=" +
-          " ".join(f"{r:.5f}" for r in rs), flush=True)
+        rsw.append(score_rrr_worst(r))
+    print(f"greedy RRR mean={g:.5f} worst={gw:.5f} | random mean=" +
+          " ".join(f"{r:.5f}" for r in rs) + " worst=" +
+          " ".join(f"{r:.5f}" for r in rsw), flush=True)
     (ADAPT / 'runs' / 'coreset.json').write_text(__import__('json').dumps(
         {"chosen": [pool_ids[c] for c in chosen], "gains": gains,
-         "greedy_rrr": g, "random_rrr": rs}, indent=1))
+         "greedy_rrr": g, "greedy_worst": gw,
+         "random_rrr": rs, "random_worst": rsw}, indent=1))
     # strata of selected
     import json as _j
     from strata import profile, assign
