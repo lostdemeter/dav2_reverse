@@ -1651,3 +1651,20 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   stats), not specific content. Caveat, stated: greedy
   optimized OLS-worst, verified RRR — truncation may wash out
   selection differences; the tie is reported, not oversold.
+
+## 2026-09-23 — PRE-REGISTERED: synthesis loop (user-directed)
+
+- Q: can we GENERATE the core instead of selecting it? Parametric
+  generator (gradients + occluder discs + checker/noise texture,
+  wide ranges) -> 200-scene pool -> greedy-25 by worst-tokcorr
+  (same machinery) vs greedy-real-25 (mean 0.99192/worst 0.95444)
+  + random controls. Stimuli saved to captures/synth_core/ with
+  a contact sheet for human viewing.
+- Predictions: synth-25 within 0.002 of real-25 on mean but lags
+  on worst-case (natural phase structure matters); refinement
+  (mutate winners, re-greedy) closes half the gap. Synth matches
+  reals -> training data fully synthesizable (huge). Synth <0.98
+  -> natural statistics essential beyond 4 stats (also an
+  answer).
+- Phase 2 (only if phase 1 close): RRR-fit student on synth set,
+  depth-gate. Refinement loop proper (v2) follows phase-1 numbers.

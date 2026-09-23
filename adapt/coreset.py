@@ -21,6 +21,11 @@ LAYERS = (0, 1, 2)
 RANK = 128
 LAMBDA = 1e-6
 COV_CACHE = ADAPT / 'runs' / 'coreset_covs.npz'
+_fp = Path(__file__).parent / 'fixtures' / 'fit_pool.npz'
+_zfp = np.load(_fp, allow_pickle=True)
+PROBE_RGB = ([_zfp['rgb'][len(_zfp['rgb']) - 1 - i].astype(np.float32) / 255.0
+              for i in range(5)])
+del _zfp
 
 
 def ols(Sxx, Sxy):
@@ -42,6 +47,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--pool', type=int, default=150)
     ap.add_argument('--steps', type=int, default=25)
+    ap.add_argument('--pool-file', default='adapt/fixtures/fit_pool.npz',
+                    help='candidate pool npz (rgb uint8 + ids); probe stays '
+                         'fixed (fit_pool tail + fixture synth) for '
+                         'comparability across pools')
+    ap.add_argument('--cov-suffix', default='',
+                    help='cov-cache filename suffix per pool (default: none)')
     args = ap.parse_args()
     import torch
     import student_probe as SP
@@ -50,9 +61,15 @@ def main():
     shared = load_shared(device)
     bb, pre = shared['backbone'], shared['preprocess']
 
-    zf = np.load(ADAPT / 'fixtures' / 'fit_pool.npz', allow_pickle=True)
+    zf = np.load(REPO / args.pool_file if not
+                 Path(args.pool_file).is_absolute() else args.pool_file,
+                 allow_pickle=True)
     pool_idx = list(range(min(args.pool, len(zf['rgb']))))
     pool_ids = [str(zf['ids'][i]) for i in pool_idx]
+    print(f"pool: {args.pool_file} ({len(pool_idx)} scenes)", flush=True)
+    cov_cache = (ADAPT / 'runs' /
+                 f'coreset_covs{args.cov_suffix or ""}.npz')
+    COV = cov_cache
 
     def blk_of(rgb):
         with torch.no_grad():
@@ -62,8 +79,8 @@ def main():
                          for k, v in cap[(li, 'blk')].items()}
                     for li in LAYERS}
 
-    if COV_CACHE.exists():
-        z = np.load(COV_CACHE, allow_pickle=False)
+    if COV.exists():
+        z = np.load(COV, allow_pickle=False)
         if int(np.asarray(z['n']).ravel()[0]) >= len(pool_idx) and z['ids'].tolist() == pool_ids:
             print("cov cache hit", flush=True)
             covs = {li: {nm: (z[f'{li}_{nm}_Sxx'], z[f'{li}_{nm}_Sxy'])
@@ -100,11 +117,11 @@ def main():
             out[k + '_Sxx'] = np.stack([r[k][0] for r in per32])
             out[k + '_Sxy'] = np.stack([r[k][1] for r in per32])
         del per32
-        np.savez_compressed(COV_CACHE, **out)
-        print(f"cached -> {COV_CACHE}", flush=True)
+        np.savez_compressed(COV, **out)
+        print(f"cached -> {COV}", flush=True)
         import gc as _gc
         _gc.collect()
-    z = np.load(COV_CACHE, allow_pickle=False)
+    z = np.load(COV, allow_pickle=False)
     Sxx = {li: {nm: z[f'{li}_{nm}_Sxx'].astype(np.float64)
                 for nm, _, _, _, _ in SP.MAPS} for li in LAYERS}
     Sxy = {li: {nm: z[f'{li}_{nm}_Sxy'].astype(np.float64)
@@ -113,14 +130,11 @@ def main():
     import gc as _gc
     _gc.collect()
 
-    # probe tokens: 5 held-out reals (outside pool) + 2 synth.
-    # Harder probe than v1 (mean over 3 scenes saturated by step 3).
-    npool = len(zf['rgb'])
-    probe_rgb = ([zf['rgb'][npool - 1 - i].astype(np.float32) / 255.0
-                  for i in range(5)] +
-                 [fx0 for fx0 in
-                  [load_fixtures(include_audit=False)['exploration'][2][0],
-                   load_fixtures(include_audit=False)['exploration'][4][0]]])
+    # probe tokens: FIXED across pools (fit_pool tail + fixture synth)
+    # so synth-pool numbers compare directly with real-pool numbers.
+    fx = load_fixtures(include_audit=False)
+    probe_rgb = list(PROBE_RGB) + [fx['exploration'][2][0],
+                                   fx['exploration'][4][0]]
     print("probe tokens...", flush=True)
     P = {li: [] for li in LAYERS}
     for rgb in probe_rgb:
@@ -179,7 +193,7 @@ def main():
     print(f"greedy RRR mean={g:.5f} worst={gw:.5f} | random mean=" +
           " ".join(f"{r:.5f}" for r in rs) + " worst=" +
           " ".join(f"{r:.5f}" for r in rsw), flush=True)
-    (ADAPT / 'runs' / 'coreset.json').write_text(__import__('json').dumps(
+    (ADAPT / 'runs' / f'coreset{args.cov_suffix or ""}.json').write_text(__import__('json').dumps(
         {"chosen": [pool_ids[c] for c in chosen], "gains": gains,
          "greedy_rrr": g, "greedy_worst": gw,
          "random_rrr": rs, "random_worst": rsw}, indent=1))
