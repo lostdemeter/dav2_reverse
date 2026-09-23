@@ -1276,6 +1276,21 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   Predicts >=0.997 (beats cosine best) — the basin-breaker
   candidate. Flat (~0.996) -> drift-penalty insufficient.
 
+## 2026-09-23 — OUTCOME (c): 0.99619, faster + tighter, same ceiling
+
+- Best ep84 0.99619 (11/54), min 0.98269 — best worst-case in
+  program history. Matches cosine 0.99624 on mean, tighter
+  floor. But pre-registered >=0.997 MISSED: drift-penalty
+  insufficient as a basin-breaker. Learns faster (0.99595 by
+  ep49 vs ep89 depth-only), same ceiling.
+- TRIO CLOSED. (b) coverage-mechanism dead; (a) basin real
+  (0.77); (c) landscape-change insufficient. Nine interventions,
+  ceiling 0.9962. The residual lives in synthetic-gradient
+  scenes and survives: init, data x4, synth-mix, schedule,
+  rank±, unfreeze, deep supervision. Next candidates worthy of
+  the name: full-early-width student (concede narrowing), or
+  accept ~0.996.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
