@@ -1234,6 +1234,26 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   accept ~0.996 as the narrow-early result (bank depth-graded
   prior + RRR-init hybrid), or full-early-width student next.
 
+## 2026-09-23 — PRE-REGISTERED: basin-breaker trio (user-approved)
+
+- Q: are we trapped in the RRR basin (init 0.992, all gains
+  ±0.004, cosine halves train loss for +0.0003 held-out)?
+- (b) Synth-residual probe: RRR-128 bases from real-dominated
+  covs; relative reconstruction residual on held-out REAL vs
+  SYNTHETIC activations per map (L0-2). Predicts synth residual
+  >> real residual (mechanism for E0T0L0V0 failures). If equal,
+  coverage-in-activation-space is dead as a mechanism.
+- (a) Random-init run: proper small-random factors (NOT the
+  dead A=0 default), same protocol. Lands >=0.994 -> no trap,
+  gradients do the work, RRR-init unremarkable. Lands <=0.97 ->
+  basin real, RRR carries the result, gradients only polish.
+- (c) Deep supervision: student L0-2 layer-outs vs teacher
+  layer-outs (online teacher forward, no_grad) as extra loss
+  term (lambda 0.1, variance-normalized) + depth loss. Directly
+  penalizes compounding drift; changes landscape, not position.
+  Predicts >=0.997 (beats cosine best) — the basin-breaker
+  candidate. Flat (~0.996) -> drift-penalty insufficient.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?

@@ -23,6 +23,11 @@ import copy
 
 RANK = int(__import__('os').environ.get('STUDENT_RANK', '128'))
 STUDENT_LAYERS = (0, 1, 2)
+RANDOM_INIT = __import__('os').environ.get('STUDENT_RANDOM_INIT', '') == '1'
+# Deep supervision: student L0-2 layer-outs vs teacher layer-outs
+# (online teacher forward, no_grad), variance-normalized MSE x lambda.
+# 0 = off (legacy depth-only loss).
+DEEPSUP = float(__import__('os').environ.get('STUDENT_DEEPSUP', '0.0'))
 # Late layers unfrozen at small LR (absorbability lever). Env override
 # for sweeps without flag plumbing: STUDENT_UNFREEZE="9,10,11".
 LATE_LAYERS = tuple(int(x) for x in
@@ -33,7 +38,9 @@ MAPS = ("q.weight", "k.weight", "v.weight", "proj.weight",
         "mlp1.weight", "mlp2.weight")
 LABEL_CACHE = ADAPT / 'runs' / 'grad_labels.npz'
 BEST_STEM = (f'student_grad_best_r{RANK}'
-               f'{"_ul" + "-".join(map(str, LATE_LAYERS)) if LATE_LAYERS else ""}')
+               f'{"_ul" + "-".join(map(str, LATE_LAYERS)) if LATE_LAYERS else ""}'
+               f'{"_rand" if RANDOM_INIT else ""}'
+               f'{f"_ds{DEEPSUP:g}" if DEEPSUP > 0 else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -84,8 +91,20 @@ class StudentBackbone:
                 if p is not None]
 
     def rrr_init(self, covs):
-        """Init factors from RRR solutions: M=USV' -> A=(US).T, B=V'.T."""
+        """Init factors from RRR solutions (skipped when RANDOM_INIT)."""
         import torch
+        if RANDOM_INIT:
+            with torch.no_grad():
+                for (li, m), (A, B, b) in self.factors.items():
+                    W = self.teacher._w[f'layer{li}.{m}']
+                    do, di = W.shape
+                    # proper small-random (NOT the dead A=0 default):
+                    # |B@A| entries ~ N(0, 0.02^2*sqrt(r))
+                    A.copy_(torch.randn(RANK, di, device=self.device) * 0.02)
+                    B.copy_(torch.randn(do, RANK, device=self.device) * 0.02)
+                    b.zero_()
+            print("RANDOM init (basin-trap test, no RRR)", flush=True)
+            return
         with torch.no_grad():
             for li in STUDENT_LAYERS:
                 for mk, dk, _, di, do in covs['maps']:
@@ -107,7 +126,7 @@ class StudentBackbone:
                     b.copy_(torch.from_numpy(
                         Wrr[-1].astype(np.float32)).to(self.device))
 
-    def forward_backbone(self, pv, taps=None):
+    def forward_backbone(self, pv, taps=None, capture=None):
         """forward_stages with bottleneck composition via _g override."""
         teacher = self.teacher
         orig_g = teacher._g
@@ -135,7 +154,7 @@ class StudentBackbone:
 
         teacher._g = _g
         try:
-            return teacher.forward_stages(pv, taps=taps)
+            return teacher.forward_stages(pv, taps=taps, capture=capture)
         finally:
             teacher._g = orig_g
 
@@ -345,10 +364,28 @@ def main():
                 pvs.append(shared['preprocess'](rgb))
             pv = torch.cat(pvs).to(device)  # preprocess gives [1,3,H,W] each
             tgt = Y[idx]
-            fmaps, ph, pw = student.forward_backbone(pv)
+            if DEEPSUP > 0:
+                cap_s = {}
+                fmaps, ph, pw = student.forward_backbone(pv, capture=cap_s)
+                with torch.no_grad():
+                    cap_t = {}
+                    shared['backbone'].forward_stages(pv, capture=cap_t)
+                ds_terms = []
+                for li in STUDENT_LAYERS:
+                    s_out = cap_s[li][1].float()
+                    t_out = cap_t[li][1].float()
+                    ds_terms.append(
+                        ((s_out - t_out) ** 2).mean() /
+                        (t_out.var().clamp_min(1e-12)))
+                ds_loss = torch.stack(ds_terms).mean()
+            else:
+                fmaps, ph, pw = student.forward_backbone(pv)
+                ds_loss = None
             fused = _neck(fmaps)
             pred = shared['head']([fused[3]], ph, pw)
             loss, mae, gm = ssi_gm_loss(pred, tgt)
+            if ds_loss is not None:
+                loss = loss + DEEPSUP * ds_loss
             opt.zero_grad()
             loss.backward()
             opt.step()
