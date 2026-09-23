@@ -1668,3 +1668,20 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   answer).
 - Phase 2 (only if phase 1 close): RRR-fit student on synth set,
   depth-gate. Refinement loop proper (v2) follows phase-1 numbers.
+
+## 2026-09-23 — PRE-REGISTERED: heightfields + inversion (user-directed)
+
+- Heightfields (analytic 3D): RGB + TRUE depth, zero oracle.
+  Height = planes + Gaussian bumps (known objects/placements)
+  + steps; Lambertian shading (random light) + albedo texture.
+  Knobs: range/lighting/texture exactly as user specified.
+  Pool 200 -> greedy-25 vs real-25/synth-25. Predicts BETWEEN
+  (beats parametric 2D, trails photos: shading carries shape
+  cues parametrics lack, misses natural clutter).
+- Inversion (not maximization): reproduce a measured L0-block
+  activation pattern from noise init (TV + jitter). Success =
+  activation match + structured image. Predicts: works for
+  single-pattern match (overdetermined: 268k pixels -> 1370x384
+  targets... actually UNDERdetermined, should fit); the SET
+  question (spanning inversions as training data) stays open
+  pending single success.
