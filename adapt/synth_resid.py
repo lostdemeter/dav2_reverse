@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Synth-residual probe: do RRR bases span synth activations?
 
-RRR-128 maps fit on real-dominated covariances (train split); relative
-reconstruction residual ||Y-XW||/||Y|| on held-out REAL vs SYNTHETIC
-tokens, per map, layers 0-2. Pre-registered 2026-09-23: synth >> real.
+RRR-128 maps fit on STREAMED real-dominated covariances (train split);
+relative reconstruction residual on held-out REAL vs SYNTHETIC tokens,
+per map, layers 0-2. Two forward passes, O(map) memory (the naive
+version held 25GB of float64 tokens and died silently).
+Pre-registered 2026-09-23: synth >> real.
 Run: python adapt/synth_resid.py
 """
 import sys
@@ -49,50 +51,44 @@ def main():
     synth = ([rgb for rgb, _, _ in fx['exploration']] +
              [rgb for rgb, _, _ in fx['retention']])
 
-    def collect(rgb_list):
-        per = {li: [] for li in LAYERS}
+    def blk_of(rgb):
         with torch.no_grad():
-            for rgb in rgb_list:
-                cap = {}
-                bb.forward_stages(pre(rgb).to(device), capture=cap)
-                for li in LAYERS:
-                    per[li].append(
-                        {k: v.squeeze(0).double().cpu().numpy()
-                         for k, v in cap[(li, 'blk')].items()})
-        return per
+            cap = {}
+            bb.forward_stages(pre(rgb).to(device), capture=cap)
+            return {li: {k: v.squeeze(0).double().cpu().numpy()
+                         for k, v in cap[(li, 'blk')].items()}
+                    for li in LAYERS}
 
-    print("collecting train...", flush=True)
-    train = collect([zf['rgb'][i].astype(np.float32) / 255.0
-                     for i in train_idx])
-    print("collecting test...", flush=True)
-    rtest = collect(real_test)
-    stest = collect(synth)
-
-    for li in LAYERS:
-        # fit RRR on train
-        acc = {}
-        for img in train[li]:
-            pass
-        for blk in train[li]:
+    print("pass 1/2: streaming train covariances...", flush=True)
+    acc = {li: {} for li in LAYERS}
+    for n, i in enumerate(train_idx):
+        rgb = zf['rgb'][i].astype(np.float32) / 255.0
+        for li, B in blk_of(rgb).items():
             for name, ik, tk, di, do in SP.MAPS:
                 X = np.concatenate(
-                    [blk[ik], np.ones((blk[ik].shape[0], 1))], axis=1)
-                S = acc.setdefault(name, {
+                    [B[ik], np.ones((B[ik].shape[0], 1))], axis=1)
+                S = acc[li].setdefault(name, {
                     'Sxx': np.zeros((di + 1, di + 1)),
                     'Sxy': np.zeros((di + 1, do))})
                 S['Sxx'] += X.T @ X
-                S['Sxy'] += X.T @ blk[tk]
-        W = {n: rrr(S['Sxx'], S['Sxy'], RANK) for n, S in acc.items()}
-        for tag, D in (("real", rtest[li]), ("synth", stest[li])):
+                S['Sxy'] += X.T @ B[tk]
+        if (n + 1) % 50 == 0:
+            print(f"  {n + 1}/{len(train_idx)}", flush=True)
+    W = {li: {n: rrr(S['Sxx'], S['Sxy'], RANK) for n, S in acc[li].items()}
+         for li in LAYERS}
+    print("pass 2/2: test residuals...", flush=True)
+    for li in LAYERS:
+        for tag, D in (("real", real_test), ("synth", synth)):
             line = []
             for name, ik, tk, di, do in SP.MAPS:
                 num, den = 0.0, 0.0
-                for blk in D:
+                for rgb in D:
+                    B = blk_of(rgb)[li]
                     X = np.concatenate(
-                        [blk[ik], np.ones((blk[ik].shape[0], 1))], axis=1)
-                    R = blk[tk] - X @ W[name]
+                        [B[ik], np.ones((B[ik].shape[0], 1))], axis=1)
+                    R = B[tk] - X @ W[li][name]
                     num += float((R ** 2).sum())
-                    den += float((blk[tk] ** 2).sum())
+                    den += float((B[tk] ** 2).sum())
                 line.append(f"{name}={np.sqrt(num / den):.4f}")
             print(f"L{li} {tag}: " + " ".join(line), flush=True)
 
