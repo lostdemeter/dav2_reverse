@@ -123,18 +123,18 @@ def main():
                     for _, c in targets if _ == 'mlp'} | \
                    {('attn', 0): B['Oattn'][:, 1:, 0].mean().item()}
 
-    base = {k: np.mean([read(r)[k] for r in reals]) for k, _ in targets}
-    best_real = {k: max(read(r)[k] for r in reals) for k, _ in targets}
+    base = {k: np.mean([read(r)[k] for r in reals]) for k in targets}
+    best_real = {k: max(read(r)[k] for r in reals) for k in targets}
     print("selectivity (stim rows x channel cols):", flush=True)
-    hdr = "stim\\" + " ".join(f"{k[0]}{k[1]}" for k, _ in targets)
+    hdr = "stim\\" + " ".join(f"{k[0]}{k[1]}" for k in targets)
     print(hdr, flush=True)
     for (kind, ch), (rgb, final) in stims.items():
         got = read(rgb)
         row = " ".join(f"{got[k] / max(base[k], 1e-9):7.1f}x"
-                       for k, _ in targets)
+                       for k in targets)
         print(f"{kind}{ch} {row}  (vs-best-real "
               + " ".join(f"{got[k] / max(best_real[k], 1e-9):.1f}x"
-                         for k, _ in targets) + ")", flush=True)
+                         for k in targets) + ")", flush=True)
 
 
 if __name__ == '__main__':
