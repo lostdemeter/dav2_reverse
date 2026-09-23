@@ -1260,6 +1260,15 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   dead A=0 default), same protocol. Lands >=0.994 -> no trap,
   gradients do the work, RRR-init unremarkable. Lands <=0.97 ->
   basin real, RRR carries the result, gradients only polish.
+
+## 2026-09-23 — OUTCOME (a): basin real (random-init 0.77, 0/54)
+
+- 0.147 init -> 0.77 best (ep~94), flat from ep30. Gradients
+  alone on 576 scenes buy 0.62 of correlation; RRR-init buys
+  0.99 before epoch 0. Few-shot training IS the closed-form
+  init — gradients polish (+0.004) but cannot discover.
+  The program's division of labor stands: closed-form designs,
+  gradients fit.
 - (c) Deep supervision: student L0-2 layer-outs vs teacher
   layer-outs (online teacher forward, no_grad) as extra loss
   term (lambda 0.1, variance-normalized) + depth loss. Directly
