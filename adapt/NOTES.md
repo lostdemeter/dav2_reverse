@@ -1346,6 +1346,23 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   This quantifies the closed-form 90% of our result, not the
   gradient polish.
 
+## 2026-09-23 — OUTCOME: maps identified by ~40 scenes; drift is null
+
+- Drift: q/k tiny by N=5 (L0-Q 1.3% — 5 scenes identify it,
+  effrank-27 consistent); v/proj/mlp2 still 9-15% at N=160,
+  decaying ~1/sqrt(N), no sharp elbow. mlp2 slowest ✓.
+- Tokcorr: functionally FLAT from N=20-40 on (L1-v 0.9777 at
+  20 vs 0.9810 final; L2-mlp2 0.9675 vs 0.9704). Drift keeps
+  falling past 40 but tokcorr doesn't move — late drift lives
+  in functionally-NULL directions.
+- Teacher's data needs, quantified: ~40 scenes identify the
+  early maps functionally; ~5 scenes identify L0-Q/K. The
+  A-seq gains past 40 came from the gradient phase, not the
+  maps. Minimum set for the closed-form 90%: dozens, not
+  thousands. Prediction half-holds (elbow real in function
+  space, absent in parameter space — the distinction IS the
+  finding).
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
