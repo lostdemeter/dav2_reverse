@@ -74,44 +74,44 @@ def main():
     else:
         per = True
     if per is not None:
-        print("caching per-scene covariances...", flush=True)
-        per = []
+        print("caching per-scene covariances (float32)...", flush=True)
+        per32 = []
         for n, i in enumerate(pool_idx):
             rgb = zf['rgb'][i].astype(np.float32) / 255.0
             B = blk_of(rgb)
-            per.append({li: {nm: None for nm, _, _, _, _ in SP.MAPS}
-                        for li in LAYERS})
+            rec = {}
             for li in LAYERS:
                 for nm, ik, tk, di, do in SP.MAPS:
                     X = np.concatenate(
                         [B[li][ik], np.ones((B[li][ik].shape[0], 1))], axis=1)
-                    per[-1][li][nm] = (X.T @ X, X.T @ B[li][tk])
+                    # float32 storage (selection precision; exact
+                    # float64 re-fit for the chosen set at verify)
+                    rec[f'{li}_{nm}'] = (
+                        (X.T @ X).astype(np.float32),
+                        (X.T @ B[li][tk]).astype(np.float32))
+            per32.append(rec)
+            del B
             if (n + 1) % 25 == 0:
                 print(f"  {n + 1}/{len(pool_idx)}", flush=True)
         out = {'n': np.array([len(pool_idx)]),
                'ids': np.array(pool_ids)}
-        for li in LAYERS:
-            for nm, _, _, _, _ in SP.MAPS:
-                out[f'{li}_{nm}_Sxx'] = np.stack([per[i][li][nm][0]
-                                                  for i in range(len(per))])
-                out[f'{li}_{nm}_Sxy'] = np.stack([per[i][li][nm][1]
-                                                  for i in range(len(per))])
+        keys = list(per32[0].keys())
+        for k in keys:
+            out[k + '_Sxx'] = np.stack([r[k][0] for r in per32])
+            out[k + '_Sxy'] = np.stack([r[k][1] for r in per32])
+        del per32
         np.savez_compressed(COV_CACHE, **out)
         print(f"cached -> {COV_CACHE}", flush=True)
-        covs = None
-    if covs is None:
-        z = np.load(COV_CACHE, allow_pickle=False)
-        Sxx = {li: {nm: z[f'{li}_{nm}_Sxx'] for nm, _, _, _, _ in SP.MAPS}
-               for li in LAYERS}
-        Sxy = {li: {nm: z[f'{li}_{nm}_Sxy'] for nm, _, _, _, _ in SP.MAPS}
-               for li in LAYERS}
-    else:
-        Sxx = {li: {nm: np.stack([covs[li][nm][0][i]
-                                  for i in range(len(pool_idx))])
-                    for nm, _, _, _, _ in SP.MAPS} for li in LAYERS}
-        Sxy = {li: {nm: np.stack([covs[li][nm][1][i]
-                                  for i in range(len(pool_idx))])
-                    for nm, _, _, _, _ in SP.MAPS} for li in LAYERS}
+        import gc as _gc
+        _gc.collect()
+    z = np.load(COV_CACHE, allow_pickle=False)
+    Sxx = {li: {nm: z[f'{li}_{nm}_Sxx'].astype(np.float64)
+                for nm, _, _, _, _ in SP.MAPS} for li in LAYERS}
+    Sxy = {li: {nm: z[f'{li}_{nm}_Sxy'].astype(np.float64)
+                for nm, _, _, _, _ in SP.MAPS} for li in LAYERS}
+    del z
+    import gc as _gc
+    _gc.collect()
 
     # probe tokens: 2 held-out reals (outside pool) + 1 synth
     npool = len(zf['rgb'])
