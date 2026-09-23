@@ -64,7 +64,7 @@ def main():
 
     if COV_CACHE.exists():
         z = np.load(COV_CACHE, allow_pickle=False)
-        if int(z['n']) >= len(pool_idx) and z['ids'].tolist() == pool_ids:
+        if int(np.asarray(z['n']).ravel()[0]) >= len(pool_idx) and z['ids'].tolist() == pool_ids:
             print("cov cache hit", flush=True)
             covs = {li: {nm: (z[f'{li}_{nm}_Sxx'], z[f'{li}_{nm}_Sxy'])
                          for nm, _, _, _, _ in SP.MAPS} for li in LAYERS}
