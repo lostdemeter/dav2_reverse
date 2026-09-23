@@ -1620,3 +1620,17 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   of the minimal real-scene subset identifying the maps
   (covariances are additive, evaluation is tokcorr — answers
   "core inputs" empirically with no synthesis).
+
+## 2026-09-23 — PRE-REGISTERED: greedy coreset (core inputs, empirical)
+
+- Pool 150 fit_pool scenes (fixed order); per-scene covariances
+  cached (L0-2, all maps). Probe: 2 held-out reals + 1 synth
+  (tokens cached). Greedy to K=25 on mean held-out tokcorr
+  (OLS-scored, held-out = overfit guard); RRR-128 verify final;
+  random-25 x3 control.
+- Predictions: greedy beats random-25 clearly (>=0.002 mean
+  tokcorr); elbow <=15 scenes (gains concentrate early);
+  selected scenes span >=4 strata by scene ~10 (diversity
+  emerges unenforced). Random ties greedy -> scenes
+  interchangeable, core = "any ~25 reals" (weaker but still an
+  answer).
