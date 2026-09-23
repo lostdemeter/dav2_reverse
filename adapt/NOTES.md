@@ -1333,6 +1333,19 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   0.99624 best-mean; deep-sup 0.99619 best-floor — bank the
   cosine artifact, note the floor).
 
+## 2026-09-23 — PRE-REGISTERED: covariance convergence (teacher's data needs)
+
+- Q (user): minimum set of data to train THIS teacher's early
+  computation? Direct measurement: stream RRR covariances over
+  fit_pool in fixed order; snapshot W_N at N={5,10,20,40,80,160,
+  320}; per-map relative drift ||W_N-W_final||/||W_final|| +
+  held-out token-output corr of W_N (2 reals + 1 synth).
+- Predictions: elbow at 20-40 scenes (drift <1%); mlp2 slowest
+  (largest map); token-corr saturates with drift. No elbow by
+  320 -> minimal-set claim weakens (covariances keep moving).
+  This quantifies the closed-form 90% of our result, not the
+  gradient polish.
+
 ## 2026-09-22 — Bars by hand: what they did and didn't decide
 
 - Asked directly (user): could hand-set bars have affected results?
