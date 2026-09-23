@@ -1634,3 +1634,20 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   emerges unenforced). Random ties greedy -> scenes
   interchangeable, core = "any ~25 reals" (weaker but still an
   answer).
+
+## 2026-09-23 — OUTCOME coreset: random ties greedy; core is statistical
+
+- Greedy-25 RRR: mean 0.99192 / worst 0.95444. Random-25 x3:
+  means 0.99195/0.99222/0.99180, worsts 0.953-0.954. TIE
+  (within noise on both metrics). "Greedy wins >=0.002" FAILED.
+- Elbow real: worst 0.9935 -> 0.9999 by step 2, 1.0000 by step
+  5 (OLS); gains zero after. Diversity emerges unenforced
+  (5 strata by scene 10, 9 by scene 25) ✓.
+- Reading: the irreducible core is STATISTICAL, not specific.
+  No special scenes exist — any ~5-25 diverse reals identify
+  the maps. This explains covconverge (~40 random scenes work)
+  and reframes the synthetic question: synthetic inputs need
+  only match the activation DISTRIBUTION (strata edge/texture
+  stats), not specific content. Caveat, stated: greedy
+  optimized OLS-worst, verified RRR — truncation may wash out
+  selection differences; the tie is reported, not oversold.
