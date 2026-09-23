@@ -1582,3 +1582,22 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   fail broadly (matches prior tap search). If 3->2 holds everywhere
   including E1T1L0V1, the strata splits came from elsewhere (direct
   fit? noise?) — stated alternative.
+
+## 2026-09-23 — PRE-REGISTERED: activation-maximization pilot (core inputs)
+
+- Q (user): the irreducible CORE inputs — what stimuli do the
+  neurons themselves ask for? Convergence used fit_pool COCO reals
+  only (no synthetics in the identification set). Gradient ascent
+  on 518px pixels (mean-init) maximizing L0 post-GELU channels
+  (high-variance picks) + one attention-output channel; jitter
+  (random roll) + TV + L2 priors, ~200 Adam steps. Teacher path
+  untouched (forward_stages takes pixel_values directly).
+- Predictions: stimuli show edge/texture structure, not objects
+  (early ViT); target selectivity >5x vs other sampled channels;
+  synth stimuli drive their channel harder than any of 10 real
+  scenes do (else the prior failed, not the neuron).
+- Reading: structured + selective -> stimuli span the manifold
+  directions; feed them to RRR next (close the loop: failures
+  -> target neurons -> synthesized stimuli -> re-fit -> gate).
+  Mush/unselective -> pilot method insufficient, core-inputs
+  question stays open.
