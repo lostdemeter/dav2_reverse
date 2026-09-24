@@ -1958,3 +1958,14 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Tool proceeds as comparison (teacher-vs-student under
   identical protocol): same ceiling structure both sides,
   differences still informative. Student 2000-step run next.
+
+## 2026-09-24 — Inversion comparison ready; output-hygiene fix
+
+- Student inversion (identical protocol): match 0.786, H 0.63
+  vs teacher H 0.27 — narrowed maps invert EASIER (smoother,
+  lower-rank landscape). Characterization, not malfunction.
+- Output collision (same class as ckpt clobber): student strip
+  overwrote teacher's (shared captures/invert/). --tag flag
+  added (captures/invert_TAG). Re-running teacher tagged for
+  the difference analysis. Rule restated: every run artifact
+  path must be unique in config.

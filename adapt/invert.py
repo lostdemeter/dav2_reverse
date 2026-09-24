@@ -147,6 +147,9 @@ def main():
     ap.add_argument('--ckpt',
                     default='adapt/runs/student_grad_best_r128_cos.pt',
                     help='student checkpoint for --student')
+    ap.add_argument('--tag', default='',
+                    help='output subdir suffix (captures/invert[_TAG]); '
+                         'prevents run-over-run overwrites')
     ap.add_argument('--steps', type=int, default=300)
     ap.add_argument('--frames', type=int, default=0,
                     help='0 = live GUI, N = headless, save strip every N steps')
@@ -223,7 +226,7 @@ def main():
     canvas.requires_grad_(True)
     opt = torch.optim.Adam([canvas], lr=args.lr)
     rng = np.random.default_rng(3)
-    outdir = REPO / 'captures' / 'invert'
+    outdir = REPO / 'captures' / f'invert{"_" + args.tag if args.tag else ""}'
     outdir.mkdir(parents=True, exist_ok=True)
     hist = []
     show = args.frames == 0
