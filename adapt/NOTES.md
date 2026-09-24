@@ -1969,3 +1969,19 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   added (captures/invert_TAG). Re-running teacher tagged for
   the difference analysis. Rule restated: every run artifact
   path must be unique in config.
+
+## 2026-09-24 — OUTCOME inversion tool: works, no hidden catastrophe
+
+- Teacher (0.762) vs student (0.786) inversions of the dark
+  frame: both recover coarse layout + texture at 14px patch
+  granularity; mean|diff| = 0.03-0.04 pixel units (measured).
+  No dramatic student blindness — differences subtle, smooth
+  (student slightly blurrier, consistent with lower-rank
+  maps). The microscope confirms the gap is quantitative
+  (millipoint correlations), never qualitative.
+- Tool stands (adapt/invert.py: live GUI + headless + --tag +
+  --student + per-tensor diagnostics). Lesson: L0-inversion
+  ceiling (~0.76, norm ambiguity + attention competition)
+  dominates over teacher/student differences at this level.
+  Deeper-layer inversion (where L11-nonlinearity lives) is
+  the follow-up if differences are wanted sharper.
