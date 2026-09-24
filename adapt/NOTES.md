@@ -1713,3 +1713,16 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   pool (depth vs N at 7/15/30) — crossover predicted.
 - Either way the coreset->training link is qualified:
   identification-quality != training-quality at small N.
+
+## 2026-09-24 — PRE-REGISTERED: learning curves per pool (crossover test)
+
+- RRR-128 L0-2 students on random-N sets (2 draws/cell),
+  N={7,15,30,60} x {real,synth,hf}, depth-gated same 12 scenes.
+  Random (not greedy): random≈greedy established, keeps cells
+  comparable. Predicts CROSSOVER: synth/hf above real at 7
+  (phase-2 result), gap narrows by 15, real ahead by 30-60
+  (volume wins). All below bar (absolute secondary to order).
+- No crossover either way also decisive: synth leads
+  throughout -> structured hypothesis strengthened (clean
+  statistics dominate); real leads throughout -> phase-2 was
+  noise, retract the per-scene claim.
