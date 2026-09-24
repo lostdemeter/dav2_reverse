@@ -62,7 +62,8 @@ BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{"_rand" if RANDOM_INIT else ""}'
                f'{f"_ds{DEEPSUP:g}" if DEEPSUP > 0 else ""}'
                f'{"_fw" if FULLWIDTH else ""}'
-               f'{"_auglow" if AUGLOW else ""}')
+               f'{"_auglow" if AUGLOW else ""}'
+               f'{f"_darkpool{DARKPOOL_N}" if DARKPOOL_N > 0 else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -440,7 +441,7 @@ def main():
         ok = sum(c >= 0.999 for c in cs)
         print(f"[gate {tag}] mean={mean:.5f} min={mn:.5f} pass={ok}/{len(cs)}",
               flush=True)
-        if AUGLOW:
+        if AUGLOW or DARKPOOL_N > 0:
             # dark-eval (report-only): student-vs-teacher on darkened
             # eval scenes — the webcam failure regime.
             dark_rng = np.random.default_rng(1234)

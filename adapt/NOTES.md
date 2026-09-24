@@ -1849,3 +1849,16 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   images; RRR + gradients flow automatically. No online aug.
   Pre-registered: dark-eval climbs from init (no crash);
   clean holds >=0.996; saved webcam dark frames >=0.85.
+
+## 2026-09-24 — CHECKPOINT HYGIENE FAILURE (own fault, recorded)
+
+- v3's first launch reused BEST filename _ds0.1_cos (no
+  darkpool suffix) and overwrote the 0.99688 champion at ep4
+  with a 0.98267 intermediate. runs/ is gitignored: weights
+  unrecoverable except by re-running combined (~3h GPU).
+- Fixed: BEST_STEM now stamps every lever (_darkpoolN);
+  dark-eval runs when DARKPOOL_N>0 too. Rule going forward:
+  checkpoint filename must be injective in config — a
+  collision is a data-loss bug, treated as such.
+- Cost: champion must be re-earned if needed for encode.
+  Mitigation accepted; combined config re-runnable exactly.
