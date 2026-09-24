@@ -1943,3 +1943,18 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   illumination regime, not pipeline): bright/structure good,
   near-black fails. The accepted dark limitation stands with
   a live number on each side.
+
+## 2026-09-24 — Inversion bottleneck diagnosed (norm ambiguity + attention)
+
+- 2000-step teacher inversion stalls at 0.762 (not 0.99).
+  Per-tensor: K 0.948 / Oattn 0.838 / Q 0.751 / G 0.727 /
+  Y 0.659 / V 0.488 / C 0.364 / H 0.269. Spread, not uniform.
+- Mechanism: LayerNorm scale-null-space (infinite pixel inputs
+  map to same H — H structurally unrecoverable at 0.27) +
+  softmax winner-take-all attention patterns (C 0.36; tiny
+  pixel changes flip patterns -> gradient chaos). K easy
+  (direct linear, smooth). Ceiling is architectural, not
+  optimizer weakness — a characterization result in itself.
+- Tool proceeds as comparison (teacher-vs-student under
+  identical protocol): same ceiling structure both sides,
+  differences still informative. Student 2000-step run next.
