@@ -1793,3 +1793,15 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Fix path (not yet run): low-light augmentation (darken +
   clip + noise + tint) in fit/training, re-gate. Targeted,
   cheap, pre-register on launch.
+
+## 2026-09-24 — PRE-REGISTERED: consolidation sequence (user-approved)
+
+- Order: cosine+deepsup combined (best mean + best floor, one
+  run) -> low-light augmentation retrain (diagnosed dark gap)
+  -> unfreeze-late at real LR (1e-6 tested nothing) ->
+  factored inference (bit-exact vs dense) -> encode winner
+  (phi + C emit) -> inversion tool.
+- This run: STUDENT_DEEPSUP=0.1 + --schedule cosine, same
+  protocol/labels/eval. Predicts >=0.99624 (matches cosine
+  best) with min >=0.97 (keeps deepsup floor); a HOLD would
+  be the program's first genuine compression lead.
