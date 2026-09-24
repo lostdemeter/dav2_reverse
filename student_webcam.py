@@ -20,7 +20,6 @@ import torch
 
 HERE = Path(__file__).parent
 CKPT = HERE / 'adapt' / 'runs' / 'student_grad_best_r128_cos.pt'
-
 COLORMAPS = [
     (cv2.COLORMAP_MAGMA, 'magma'),
     (cv2.COLORMAP_VIRIDIS, 'viridis'),
@@ -39,7 +38,7 @@ def colorize(depth: np.ndarray, cmap) -> np.ndarray:
     return cv2.applyColorMap(norm, cmap)
 
 
-def load_student(device):
+def load_student(device, ckpt_path=None):
     import sys
     sys.path.insert(0, str(HERE / 'adapt'))
     from student_grad import StudentBackbone
@@ -47,8 +46,9 @@ def load_student(device):
     from geo_neck import GeometricNeck
     shared = load_shared(device)
     student = StudentBackbone(shared['backbone'])
-    ckpt = torch.load(CKPT, map_location=device, weights_only=False)
-    print(f"checkpoint {CKPT.name} mean_corr={ckpt['mean_corr']:.5f}",
+    ckpt_path = Path(ckpt_path) if ckpt_path else CKPT
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+    print(f"checkpoint {ckpt_path.name} mean_corr={ckpt['mean_corr']:.5f}",
           flush=True)
     with torch.no_grad():
         for (li, m), tup in ckpt['factors'].items():
@@ -69,6 +69,8 @@ def main():
     ap.add_argument('--compare-hf', action='store_true')
     ap.add_argument('--cpu', action='store_true')
     ap.add_argument('--size', type=int, default=None)
+    ap.add_argument('--ckpt', type=str, default=None,
+                    help='student checkpoint (default: banked cosine r128)')
     args = ap.parse_args()
 
     if args.size is None:
@@ -78,7 +80,7 @@ def main():
     print(f"device: {device}")
 
     print("loading teacher pipeline + student backbone...")
-    shared, student, neck = load_student(device)
+    shared, student, neck = load_student(device, args.ckpt)
     teacher_bb = shared['backbone']
     head = shared['head']
     pre = shared['preprocess']
