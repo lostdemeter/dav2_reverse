@@ -40,6 +40,11 @@ def rrr(Sxx, Sxy, r):
 
 
 def main():
+    import argparse as _ap
+    _a = _ap.ArgumentParser()
+    _a.add_argument('--confirm-only', action='store_true',
+                    help='skip screening; confirm from saved autopsy.json')
+    _args, _ = _a.parse_known_args()
     import torch
     import student_probe as SP
     from run_search import load_shared, load_fixtures
@@ -99,36 +104,40 @@ def main():
                     cells.append(c if np.isfinite(c) else -1.0)
         return float(np.mean(cells)), float(min(cells))
 
-    # 2. stats screen
-    from strata import profile, assign
-    medians = json.load(open(ADAPT / 'runs' / 'strata.json'))['medians']
-    print("d0 stats (id, stratum, edge, texture, lumspread):", flush=True)
-    for i in d0:
-        rgb = zp['rgb'][i].astype(np.float32) / 255.0
-        p = profile(rgb)
-        print(f"  {ids[i]} {assign(p, medians)} "
-              f"e={p['edge']:.3f} t={p['texture']:.3f} l={p['lumspread']:.3f}",
-              flush=True)
+    # 2+3. stats screen + drop-one-out (skipped when confirming)
+    if _args.confirm_only:
+        saved = json.load(open(ADAPT / 'runs' / 'autopsy.json'))
+        d0 = [ids.index(c) for c in saved["d0"]]
+        d1 = [ids.index(c) for c in saved["d1"]]
+        gains = [(g, gw, c) for c, g, gw in saved["gains"]]
+        print("confirm-only from saved screening", flush=True)
+    else:
+        from strata import profile, assign
+        medians = json.load(open(ADAPT / 'runs' / 'strata.json'))['medians']
+        print("d0 stats (id, stratum, edge, texture, lumspread):", flush=True)
+        for i in d0:
+            rgb = zp['rgb'][i].astype(np.float32) / 255.0
+            p = profile(rgb)
+            print(f"  {ids[i]} {assign(p, medians)} "
+                  f"e={p['edge']:.3f} t={p['texture']:.3f} l={p['lumspread']:.3f}",
+                  flush=True)
 
-    # 3. drop-one-out screening
-    base_mean, base_min = tokcorr(d0)
-    print(f"d0 full: mean={base_mean:.5f} worst={base_min:.5f}", flush=True)
-    gains = []
-    for j, i in enumerate(d0):
-        rest = [x for x in d0 if x != i]
-        m, w = tokcorr(rest)
-        gains.append((m - base_mean, w - base_min, ids[i]))
-    gains.sort(reverse=True)
-    print("top-8 suspects by mean-gain on removal:", flush=True)
-    for g, gw, cid in gains[:8]:
-        print(f"  {cid} dmean={g:+.5f} dmin={gw:+.5f}", flush=True)
-    (ADAPT / 'runs' / 'autopsy.json').write_text(json.dumps(
-        {"d0": [ids[i] for i in d0], "d1": [ids[i] for i in d1],
-         "base": [base_mean, base_min],
-         "gains": [(c, round(g, 6), round(gw, 6)) for g, gw, c in gains]},
-        indent=1))
-
-    # 4. confirm: refit minus top-3 suspects + depth-gate
+        base_mean, base_min = tokcorr(d0)
+        print(f"d0 full: mean={base_mean:.5f} worst={base_min:.5f}", flush=True)
+        gains = []
+        for j, i in enumerate(d0):
+            rest = [x for x in d0 if x != i]
+            m, w = tokcorr(rest)
+            gains.append((m - base_mean, w - base_min, ids[i]))
+        gains.sort(reverse=True)
+        print("top-8 suspects by mean-gain on removal:", flush=True)
+        for g, gw, cid in gains[:8]:
+            print(f"  {cid} dmean={g:+.5f} dmin={gw:+.5f}", flush=True)
+        (ADAPT / 'runs' / 'autopsy.json').write_text(json.dumps(
+            {"d0": [ids[i] for i in d0], "d1": [ids[i] for i in d1],
+             "base": [base_mean, base_min],
+             "gains": [(c, round(g, 6), round(gw, 6)) for g, gw, c in gains]},
+            indent=1))
     from run_search import load_fixtures as _lf
     fx2 = _lf(include_audit=False)
     zr = np.load(ADAPT / 'fixtures' / 'strata_real.npz', allow_pickle=True)
@@ -166,7 +175,7 @@ def main():
             bb._w[k].copy_(v)
         return float(np.mean(cs))
 
-    suspects = [ids.index(c) for c, _, _ in gains[:3]]
+    suspects = [ids.index(c) for _, _, c in gains[:3]]
     gate("d0-with-poison", d0)
     gate("d0-minus-top3", [x for x in d0 if x not in suspects])
     gate("d1-clean", d1)
