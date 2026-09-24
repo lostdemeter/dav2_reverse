@@ -1726,3 +1726,20 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   throughout -> structured hypothesis strengthened (clean
   statistics dominate); real leads throughout -> phase-2 was
   noise, retract the per-scene claim.
+
+## 2026-09-24 — OUTCOME curves: no scaling, no separation, one poison
+
+- Means sit 0.96-0.99 in ALL 24 cells (pool x N x draw) save
+  one: synth-N60d0 collapses (0.717, min 0.19), d1 fine
+  (0.987). No crossover, no N-scaling (random-60 ~= random-7),
+  no pool separation. Phase-2 "synth>real" RETRACTED as draw
+  noise (0.008 gap < ±0.01 draw variance measured here).
+- The poison cell is the finding: synth pool contains scenes
+  whose inclusion wrecks fits (hf random-verify worst -0.48
+  was the same phenomenon). Photos show no poison in any
+  draw. Selection matters for synthetics as POISON AVOIDANCE,
+  not magic-scene discovery. Independent RRR plateaus by
+  N≈7-15 everywhere; A-seq/gradient gains came from fitting
+  machinery, never data volume.
+- Next: poison autopsy (which scenes? what stats?) to constrain
+  generator ranges — the refinement loop's actual job spec.
