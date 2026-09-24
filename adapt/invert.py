@@ -144,6 +144,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--student', action='store_true',
                     help='invert through the student (default: teacher)')
+    ap.add_argument('--ckpt',
+                    default='adapt/runs/student_grad_best_r128_cos.pt',
+                    help='student checkpoint for --student')
     ap.add_argument('--steps', type=int, default=300)
     ap.add_argument('--frames', type=int, default=0,
                     help='0 = live GUI, N = headless, save strip every N steps')
