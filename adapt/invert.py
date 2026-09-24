@@ -149,7 +149,10 @@ def main():
                     help='0 = live GUI, N = headless, save strip every N steps')
     ap.add_argument('--scene', default='captures/student_webcam_0_combined.png',
                     help='combined PNG (raw frame = left third) or RGB file')
-    ap.add_argument('--ckpt', default='adapt/runs/student_grad_best_r128_cos.pt')
+    ap.add_argument('--lr', type=float, default=0.01)
+    ap.add_argument('--clip', type=float, default=1.0,
+                    help='gradient clip norm (0 = off)')
+    ap.add_argument('--tv', type=float, default=TV_W)
     args = ap.parse_args()
 
     import torch
@@ -215,7 +218,7 @@ def main():
     torch.manual_seed(7)
     canvas = (torch.randn_like(tgt_pv) * 0.5).to(device)
     canvas.requires_grad_(True)
-    opt = torch.optim.Adam([canvas], lr=LR)
+    opt = torch.optim.Adam([canvas], lr=args.lr)
     rng = np.random.default_rng(3)
     outdir = REPO / 'captures' / 'invert'
     outdir.mkdir(parents=True, exist_ok=True)
@@ -239,7 +242,9 @@ def main():
         fit = torch.stack(terms).mean()
         tv = ((j[:, :, 1:, :] - j[:, :, :-1, :]).abs().mean() +
               (j[:, :, :, 1:] - j[:, :, :, :-1]).abs().mean())
-        (fit + TV_W * tv).backward()
+        (fit + args.tv * tv).backward()
+        if args.clip > 0:
+            torch.nn.utils.clip_grad_norm_([canvas], args.clip)
         opt.step()
         with torch.no_grad():
             canvas.clamp_(-3.0, 3.0)
