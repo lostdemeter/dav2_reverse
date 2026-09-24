@@ -1974,11 +1974,12 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 
 - Teacher (0.762) vs student (0.786) inversions of the dark
   frame: both recover coarse layout + texture at 14px patch
-  granularity; mean|diff| = 0.03-0.04 pixel units (measured).
-  No dramatic student blindness — differences subtle, smooth
-  (student slightly blurrier, consistent with lower-rank
-  maps). The microscope confirms the gap is quantitative
-  (millipoint correlations), never qualitative.
+  granularity; mean|diff| = 0.102 pixel units, p99 0.341
+  (measured — an earlier draft of this entry guessed 0.03,
+  corrected). Same coarse structure, moderate pixel-level
+  differences; student blurrier, consistent with lower-rank
+  maps. No catastrophic blindness, but the gap is visible,
+  not millipoint-only at this level.
 - Tool stands (adapt/invert.py: live GUI + headless + --tag +
   --student + per-tensor diagnostics). Lesson: L0-inversion
   ceiling (~0.76, norm ambiguity + attention competition)
