@@ -2005,3 +2005,18 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   — stated, no compute spent). Predicts overall >=0.99688
   (beats combined best) with E0T0L0V0 min rising. Flat ->
   supervision-specificity dead, move to Phase B.
+
+## 2026-09-24 — OUTCOME Phase A1: 0.99702 overall, E0 NOT fixed
+
+- Best ep54 0.99702 (14/54, min 0.98304): beats combined
+  best; first 0.997+ in program history. Overall bar PASSES.
+- E0 bar FAILS: E0T0L0V0 0.98178 (was 0.98695); the gradient
+  scene exploration-2 WORSENED 0.971->0.919 while audit-1
+  improved 0.968->0.994. Multi-scale GM helps edge/texture
+  scenes (E1T1L0V1 holds 1.0000) and HURTS smooth ones —
+  gradient loss has nothing to match on smooth scenes, so it
+  pulls maps away from them. Mechanism understood, stated.
+- Phase B mandated with teeth: E0 needs COVERAGE (scenes in
+  fit), not sharper loss. exploration-2 (0.919) is now the
+  single worst scene and the cleanest target in program
+  history.
