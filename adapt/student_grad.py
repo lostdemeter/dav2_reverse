@@ -176,6 +176,141 @@ class StudentBackbone:
                     b.copy_(torch.from_numpy(
                         Wrr[-1].astype(np.float32)).to(self.device))
 
+    def flin(self, h, li, m):
+        """Factored linear for bottleneck maps: B@(A@h) + b.
+
+        Same math as F.linear(h, B@A, b), fewer MACs when
+        r*(di+do) < di*do. Falls back to dense for non-student,
+        late-unfrozen, and full-width maps.
+        """
+        import torch.nn.functional as F
+        key = (li, m)
+        if key in self.factors:
+            A, B, b = self.factors[key]
+            return F.linear(F.linear(h, A, None), B, b)
+        return F.linear(h, self.teacher._w[f'layer{li}.{m}'],
+                        self.teacher._w.get(
+                            f'layer{li}.{m.replace(".weight", ".bias")}'))
+
+    def forward_factored(self, pv, taps=None, capture=None):
+        """Mirror of forward_stages with factored bottleneck matmuls.
+
+        Honest duplication (documented): any change to the teacher
+        path must be mirrored here and re-verified (maxabs + depth
+        parity). Restrictions: no dropped/bgains/zero_heads and no
+        late/fullwidth overrides (asserted) — inference-only path
+        for the bottleneck student.
+        """
+        import torch
+        import torch.nn.functional as F
+        from geo_backbone import (HIDDEN, LAYERS, HEADS, HEAD_DIM, PATCH,
+                                  OUT_STAGES)
+        assert not LATE_LAYERS and not FULLWIDTH, \
+            "factored supports bottleneck student only"
+        teacher = self.teacher
+        want = tuple(taps) if taps is not None else OUT_STAGES
+        B, _, H, W = pv.shape
+        x = pv.to(self.device)
+        ph, pw = H // PATCH, W // PATCH
+        _g = teacher._g
+        x = F.conv2d(x, _g('patch_proj.weight'), _g('patch_proj.bias'),
+                     stride=PATCH)
+        x = x.flatten(2).transpose(1, 2)
+        cls_t = _g('cls_token')
+        if cls_t.dim() == 1:
+            cls_t = cls_t.view(1, 1, -1)
+        elif cls_t.dim() == 2:
+            cls_t = cls_t.unsqueeze(0) if cls_t.shape[0] == 1 \
+                else cls_t.view(1, 1, -1)
+        x = torch.cat([cls_t.expand(B, -1, -1), x], dim=1)
+        pos = _g('pos_embed')
+        if pos.dim() == 2:
+            pos = pos.unsqueeze(0)
+        if pos.shape[1] != x.shape[1]:
+            cls_pos = pos[:, :1, :]
+            patch_pos = pos[:, 1:, :].reshape(1, 37, 37, HIDDEN)
+            patch_pos = patch_pos.permute(0, 3, 1, 2)
+            patch_pos = F.interpolate(patch_pos, size=(ph, pw),
+                                      mode='bicubic', align_corners=False)
+            patch_pos = patch_pos.permute(0, 2, 3, 1).reshape(1, -1, HIDDEN)
+            pos = torch.cat([cls_pos, patch_pos], dim=1)
+        x = x + pos
+        stages = {}
+        for li in range(LAYERS):
+            p = f'layer{li}.'
+            D = HIDDEN
+            layer_in = x if capture is not None else None
+            h = F.layer_norm(x, (D,), _g(p + 'norm1.weight'),
+                             _g(p + 'norm1.bias'))
+            if li in STUDENT_LAYERS:
+                q, k_, v = (self.flin(h, li, m) for m in
+                            ('q.weight', 'k.weight', 'v.weight'))
+            else:
+                q = F.linear(h, _g(p + 'q.weight'), _g(p + 'q.bias'))
+                k_ = F.linear(h, _g(p + 'k.weight'), _g(p + 'k.bias'))
+                v = F.linear(h, _g(p + 'v.weight'), _g(p + 'v.bias'))
+            if capture is not None:
+                _cap_h, _cap_q, _cap_k, _cap_v = h, q, k_, v
+            q = q.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
+            k_ = k_.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
+            v = v.view(B, -1, HEADS, HEAD_DIM).transpose(1, 2)
+            attn = (q @ k_.transpose(-2, -1)) / (HEAD_DIM ** 0.5)
+            attn = attn.softmax(dim=-1)
+            o = (attn @ v).transpose(1, 2).contiguous().view(B, -1, D)
+            if capture is not None:
+                _cap_c = o
+            o = self.flin(o, li, 'proj.weight') if li in STUDENT_LAYERS \
+                else F.linear(o, _g(p + 'proj.weight'), _g(p + 'proj.bias'))
+            if capture is not None:
+                _cap_o = o
+            x = x + o * _g(p + 'ls1')
+            h2 = F.layer_norm(x, (D,), _g(p + 'norm2.weight'),
+                              _g(p + 'norm2.bias'))
+            m_in = x
+            if capture is not None:
+                _cap_n2 = h2
+            if li in STUDENT_LAYERS:
+                h2 = self.flin(h2, li, 'mlp1.weight')
+            else:
+                h2 = F.linear(h2, _g(p + 'mlp1.weight'), _g(p + 'mlp1.bias'))
+            pre = h2
+            h2 = F.gelu(h2)
+            post = h2
+            if li in STUDENT_LAYERS:
+                h2 = self.flin(h2, li, 'mlp2.weight')
+            else:
+                h2 = F.linear(h2, _g(p + 'mlp2.weight'), _g(p + 'mlp2.bias'))
+            if capture is not None:
+                _cap_y = h2
+            x = x + h2 * _g(p + 'ls2')
+            if (li + 1) in want:
+                stages[li + 1] = x
+            if capture is not None:
+                capture[li] = (layer_in.detach().clone(), x.detach().clone())
+                capture[(li, 'blk')] = {
+                    'H': _cap_h.detach().clone(),
+                    'Q': _cap_q.detach().clone(),
+                    'K': _cap_k.detach().clone(),
+                    'V': _cap_v.detach().clone(),
+                    'C': _cap_c.detach().clone(),
+                    'Oattn': _cap_o.detach().clone(),
+                    'M': m_in.detach().clone(),
+                    'N2': _cap_n2.detach().clone(),
+                    'P1': pre.detach().clone(),
+                    'G': post.detach().clone(),
+                    'Y': _cap_y.detach().clone()}
+        norm_w = teacher._w.get('final_norm.weight')
+        norm_b = teacher._w.get('final_norm.bias')
+        fmaps = []
+        for s in want:
+            h = stages[s]
+            if norm_w is not None:
+                h = F.layer_norm(h, (HIDDEN,), norm_w, norm_b)
+            patch = h[:, 1:, :]
+            fmaps.append(patch.reshape(B, ph, pw, HIDDEN)
+                         .permute(0, 3, 1, 2).contiguous())
+        return fmaps, ph, pw
+
     def forward_backbone(self, pv, taps=None, capture=None):
         """forward_stages with bottleneck composition via _g override."""
         teacher = self.teacher
