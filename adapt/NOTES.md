@@ -1986,3 +1986,13 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   dominates over teacher/student differences at this level.
   Deeper-layer inversion (where L11-nonlinearity lives) is
   the follow-up if differences are wanted sharper.
+
+## 2026-09-24 — Latest-model webcam: 0.991 live (sanity PASSES)
+
+- frac15-darkpool mid-training checkpoint live: 0.990-0.994
+  vs teacher (mean 0.9906), 0.982-0.995 vs HF, 24ms/frame.
+  Scene has both bright curtain and near-black corners; the
+  student tracks the teacher across the range including dim
+  regions (brighter room than the 0.767 run, dimmer than
+  lab scenes). Live processing confirmed on the latest
+  weights, not just the banked ones.
