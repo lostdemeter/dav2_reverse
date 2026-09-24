@@ -1685,3 +1685,14 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   targets... actually UNDERdetermined, should fit); the SET
   question (spanning inversions as training data) stays open
   pending single success.
+
+## 2026-09-24 — PRE-REGISTERED: post-hoc verify + phase 2 (killed runs)
+
+- Killed both greedy runs (steps 7-9, gains ~0, ~1 day left).
+  Post-hoc: RRR-128 verify greedy-7 per pool + random-7 x3 on
+  the fixed 7-scene probe. Predicts real-7 >= synth/hf-7 on
+  worst-case (gap from early steps persists); hf-7 >= synth-7.
+- Phase 2: RRR-128 students fit on greedy-7 sets, depth-gated
+  on 12 scenes. Predicts real-7 best, hf middle, synth last;
+  all below bar (7 scenes << 40-scene identification knee).
+  The comparison across sets (not the absolute) is the result.
