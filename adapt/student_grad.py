@@ -31,6 +31,11 @@ FULLWIDTH = __import__('os').environ.get('STUDENT_FULLWIDTH', '') == '1'
 # (online teacher forward, no_grad), variance-normalized MSE x lambda.
 # 0 = off (legacy depth-only loss).
 DEEPSUP = float(__import__('os').environ.get('STUDENT_DEEPSUP', '0.0'))
+# Low-light augmentation (dark-room gap fix): photometric-only
+# transforms preserving geometry, so clean teacher labels stay valid.
+# Env STUDENT_AUGLOW=1 enables in the gradient phase (RRR init untouched).
+AUGLOW = __import__('os').environ.get('STUDENT_AUGLOW', '') == '1'
+AUGLOW_P = float(__import__('os').environ.get('STUDENT_AUGLOW_P', '0.5'))
 # Late layers unfrozen at small LR (absorbability lever). Env override
 # for sweeps without flag plumbing: STUDENT_UNFREEZE="9,10,11".
 LATE_LAYERS = tuple(int(x) for x in
@@ -44,7 +49,8 @@ BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{"_ul" + "-".join(map(str, LATE_LAYERS)) if LATE_LAYERS else ""}'
                f'{"_rand" if RANDOM_INIT else ""}'
                f'{f"_ds{DEEPSUP:g}" if DEEPSUP > 0 else ""}'
-               f'{"_fw" if FULLWIDTH else ""}')
+               f'{"_fw" if FULLWIDTH else ""}'
+               f'{"_auglow" if AUGLOW else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -222,6 +228,23 @@ def build_labels(shared, fit_pairs, force=False):
     return arr
 
 
+def lowlight_augment(rgb, rng):
+    """Photometric dark-room transform (geometry-preserving).
+
+    Darken xU(0.25,0.6) + shadow clip (crushed blacks) + Gaussian
+    sensor noise + tint jitter. Mirrors the webcam failure regime.
+    """
+    f = float(rng.uniform(0.25, 0.6))
+    out = np.clip(np.asanyarray(rgb, dtype=np.float32) * f, 0, 1)
+    clip = float(rng.uniform(0.02, 0.08))
+    out = np.where(out < clip, 0.0, (out - clip) / (1 - clip))
+    out = np.clip(out + rng.normal(
+        0, float(rng.uniform(0.005, 0.02)), out.shape).astype(np.float32),
+        0, 1)
+    tint = rng.uniform(0.8, 1.2, 3).astype(np.float32)
+    return np.clip(out * tint, 0, 1).astype(np.float32)
+
+
 def ssi_gm_loss(pred, target):
     """SSI (lstsq scale+shift align + MAE) + 2x Sobel-grad L1, top-10% mask."""
     import torch
@@ -380,12 +403,30 @@ def main():
         ok = sum(c >= 0.999 for c in cs)
         print(f"[gate {tag}] mean={mean:.5f} min={mn:.5f} pass={ok}/{len(cs)}",
               flush=True)
+        if AUGLOW:
+            # dark-eval (report-only): student-vs-teacher on darkened
+            # eval scenes — the webcam failure regime.
+            dark_rng = np.random.default_rng(1234)
+            cd = []
+            for rgb, ref, cid in eval_scenes[:12]:
+                d = lowlight_augment(rgb, dark_rng)
+                cfg = copy.deepcopy(dict(SEED_CONFIG))
+                t = run_pipeline(shared, cfg, [d])[0]
+                fmaps, ph, pw = student.forward_backbone(
+                    shared['preprocess'](d).to(device))
+                with torch.no_grad():
+                    s = shared['head'](
+                        _neck(fmaps), ph, pw).squeeze(0).cpu().numpy()
+                cd.append(_corr(s, t))
+            print(f"[dark-eval {tag}] student-vs-teacher "
+                  f"mean={np.mean(cd):.5f} min={min(cd):.5f}", flush=True)
         return mean
 
     from geo_depth import MEAN as _M, STD as _S
     import PIL.Image as _I
     gate("init")
     rng = np.random.default_rng(0)
+    aug_rng = np.random.default_rng(7)
     Y = torch.from_numpy(labels).to(device)  # (N,518,518), no channel dim
     n = len(fit_pairs)
     for ep in range(args.epochs):
@@ -397,6 +438,8 @@ def main():
             pvs = []
             for j in idx:
                 rgb = fit_pairs[j][0]
+                if AUGLOW and aug_rng.random() < AUGLOW_P:
+                    rgb = lowlight_augment(rgb, aug_rng)
                 pvs.append(shared['preprocess'](rgb))
             pv = torch.cat(pvs).to(device)  # preprocess gives [1,3,H,W] each
             tgt = Y[idx]

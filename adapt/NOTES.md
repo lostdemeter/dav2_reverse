@@ -1805,3 +1805,23 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   protocol/labels/eval. Predicts >=0.99624 (matches cosine
   best) with min >=0.97 (keeps deepsup floor); a HOLD would
   be the program's first genuine compression lead.
+
+## 2026-09-24 — OUTCOME combined: 0.99688, new best (both parents)
+
+- Best ep59 0.99688 (13/54, min 0.98725): beats cosine-only
+  0.99624 on mean AND keeps deepsup's floor (min 0.987 vs
+  0.971). Combination strictly dominates both parents.
+  Pre-registered bars pass; HOLD (0.999) still distant, stated.
+- Next per sequence: low-light augmentation retrain.
+
+## 2026-09-24 — PRE-REGISTERED: low-light augmentation retrain
+
+- Dark-room gap (webcam 0.77): fit has zero dark scenes.
+  Online aug in gradient phase only (RRR init unchanged):
+  per-batch darken xU(0.25,0.6) + shadow clip + Gaussian
+  noise + tint jitter; geometry preserved so clean teacher
+  labels stay valid targets. Eval: same 54-gate + dark-eval
+  (0.3x versions) + webcam re-test on saved dark frames.
+- Predicts: dark-eval/wet-cam fidelity rises (>=0.90 on saved
+  dark frames); clean held-out holds >=0.996 (no aug
+  regression). Clean regresses -> aug too strong, dial back.
