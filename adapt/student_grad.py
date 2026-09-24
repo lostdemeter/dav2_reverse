@@ -43,6 +43,9 @@ AUGLOW_P = float(__import__('os').environ.get('STUDENT_AUGLOW_P', '0.5'))
 # fit scenes once (seeded) and appends them; labels flow through
 # build_labels (staleness rebuild) and RRR covariances automatically.
 DARKPOOL_N = int(__import__('os').environ.get('STUDENT_DARKPOOL', '0'))
+# Dark fraction of the final fit list (interference scales with
+# fraction; v3 ran 0.26). Subsamples the dark variants to hit it.
+DARKFRAC = float(__import__('os').environ.get('STUDENT_DARKFRAC', '0.0'))
 # Gentle variant (v2): milder photometrics after v1's destructive
 # interference (dark-eval 0.93->0.70: off-manifold dark batches vs
 # clean RRR basin). v2 also augments the RRR covariances (basin
@@ -63,7 +66,8 @@ BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{f"_ds{DEEPSUP:g}" if DEEPSUP > 0 else ""}'
                f'{"_fw" if FULLWIDTH else ""}'
                f'{"_auglow" if AUGLOW else ""}'
-               f'{f"_darkpool{DARKPOOL_N}" if DARKPOOL_N > 0 else ""}')
+               f'{f"_darkpool{DARKPOOL_N}" if DARKPOOL_N > 0 else ""}'
+               f'{f"_f{DARKFRAC:g}" if DARKFRAC > 0 else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -342,8 +346,14 @@ def main():
             darks.append((lowlight_augment(
                 rgb, drank, gentle=AUGLOW_GENTLE), None))
         fit_pairs = fit_pairs + darks
+        if DARKFRAC > 0:
+            n_clean = len(fit_pairs) - len(darks)
+            k = min(len(darks), int(DARKFRAC * n_clean / (1 - DARKFRAC)))
+            darks = darks[:k]
+            fit_pairs = fit_pairs[:n_clean] + darks
         print(f"darkpool: +{len(darks)} fixed dark pairs "
-              f"(gentle={AUGLOW_GENTLE})", flush=True)
+              f"(gentle={AUGLOW_GENTLE}, "
+              f"frac={len(darks) / len(fit_pairs):.2f})", flush=True)
     # targeted coverage (failmap 2026-09-22): fit is 100% real, student
     # fails synthetics it never saw. Mix exploration+retention synth
     # into fit; gate+audit stay eval-only.
