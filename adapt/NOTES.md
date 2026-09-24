@@ -1696,3 +1696,20 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   on 12 scenes. Predicts real-7 best, hf middle, synth last;
   all below bar (7 scenes << 40-scene identification knee).
   The comparison across sets (not the absolute) is the result.
+
+## 2026-09-24 — OUTCOME phase 2: synth/hf BEAT real-7 (inverted, informative)
+
+- Depth-gated RRR-128 on greedy-7 sets: synth-7 0.97911 (min
+  0.93, 1/12) > hf-7 0.97776 (min 0.93) > real-7 0.97139 (min
+  0.78). Predicted order REVERSED.
+- Reading (two rivals, stated): (i) small-N noise dominates —
+  all three starved (7 << 40-scene knee), tokcorr ranking need
+  not transfer to depth ranking; min gaps (0.78 vs 0.93) argue
+  against pure noise. (ii) STRUCTURED hypothesis: simple scenes
+  give stable covariances (well-conditioned fits), diverse
+  reals give high-variance covariances (overfit) at tiny N —
+  synthetics better PER-SCENE few-shot, reals win with volume
+  (the A-seq curve). Discriminating test: learning curves per
+  pool (depth vs N at 7/15/30) — crossover predicted.
+- Either way the coreset->training link is qualified:
+  identification-quality != training-quality at small N.
