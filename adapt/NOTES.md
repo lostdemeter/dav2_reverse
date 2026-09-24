@@ -1755,3 +1755,23 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   or flat-black — generator range excess). Diffuse damage
   (no single removal helps) -> conditioning story, not
   poison scenes -> constrain overall ranges instead.
+
+## 2026-09-24 — OUTCOME autopsy: NO poison scenes (self-correction)
+
+- Confirm: d0-with-poison 0.71687 reproduces; d0-minus-top3
+  0.98570 recovers to d1-clean 0.98706. Suspects (synth-27/
+  138/49) are input-stat ORDINARY (all E0T0L0V1, mid-range
+  edge/texture — kills the range-excess prediction).
+- CORRECTION (control run): d0-minus-RANDOM3 recovers
+  IDENTICALLY (0.98548, min 0.92). The top-3 are NOT special
+  (previous message crowned them prematurely — corrected).
+  ANY 3 removals restore parity; d1 (N=60, 19 scenes shared
+  with d0) was always fine. The collapse is a knife-edge in
+  the specific 60-combination's conditioning, not a scene
+  property at all.
+- Consequences (refinement-loop spec rewritten): blacklist
+  scenes VOID; input-stat range constraints VOID (suspects
+  ordinary); "poison" framing RETIRED — it is a fitting
+  instability. What works: cap set size at the elbow (~10,
+  gains nil past it anyway) + ridge scaling with N. The loop's
+  job is conditioning control, not scene selection.
