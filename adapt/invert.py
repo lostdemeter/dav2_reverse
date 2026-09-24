@@ -105,8 +105,11 @@ def main():
 
     for s in range(args.steps):
         opt.zero_grad()
-        dy, dx = int(rng.integers(-16, 17)), int(rng.integers(-16, 17))
-        j = torch.roll(canvas, shifts=(dy, dx), dims=(2, 3))
+        # NOTE: no jitter — the per-token target is position-locked,
+        # so translation augmentation fights the fit (v1 stalled at
+        # 0.48 with jitter; jitter suits translation-tolerant
+        # channel-mean objectives, not pattern matching).
+        j = canvas
         cap = {}
         fwd(j, capture=cap)
         B = cap[(LI, 'blk')]
