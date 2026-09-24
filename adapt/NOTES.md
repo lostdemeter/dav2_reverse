@@ -1887,3 +1887,18 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   dark stabilizes >=0.90 sustained + clean holds >=0.996.
   Still oscillates -> accept dark limitation, bank combined,
   move to factored inference + encode.
+
+## 2026-09-24 — OUTCOME fraction test: dark limitation accepted
+
+- 0.15 fraction: dark oscillates 0.86-0.91 (min ~0.3-0.45),
+  never >=0.90 sustained; clean holds 0.993-0.996. Same
+  verdict as 0.26-fraction: interference damps with fraction
+  but never stabilizes. Killed ep30 (pattern replicated).
+- Representation (overlap 0.92) vs optimization capacity
+  stands as the fourth axis distinction: one span serves
+  both regimes for FITS, joint GRADIENT optimization cannot
+  hold both. Dark limitation ACCEPTED: document (webcam dim
+  rooms degrade), don't chase. Clean line unaffected.
+- Sequence update: unfreeze-late@real-LR (still open) drops
+  below factored-verify + encode in priority — dark work is
+  closed, ship the clean winner.
