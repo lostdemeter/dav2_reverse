@@ -60,9 +60,10 @@ def main():
     raw = img[:, :w // 3] if w > h else img  # combined PNG: raw = left third
     rgb = cv2.cvtColor(raw, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
     from geo_depth import preprocess as _pp
+    tgt_pv = _pp(rgb, size=518)
     with torch.no_grad():
         cap = {}
-        bb.forward_stages(_pp(rgb, size=518).to(device), capture=cap)
+        bb.forward_stages(tgt_pv.to(device), capture=cap)
         T = {k: v.detach().clone()
              for k, v in cap[(LI, 'blk')].items()
              if k in ('H', 'Q', 'K', 'V', 'C', 'Oattn', 'N2', 'P1', 'G', 'Y')}
@@ -89,7 +90,7 @@ def main():
             return st.forward_backbone(pv, capture=capture)
 
     torch.manual_seed(7)
-    canvas = torch.randn(1, 3, 518, 518, device=device) * 0.5
+    canvas = (torch.randn_like(tgt_pv) * 0.5).to(device)
     canvas.requires_grad_(True)
     opt = torch.optim.Adam([canvas], lr=LR)
     rng = np.random.default_rng(3)
