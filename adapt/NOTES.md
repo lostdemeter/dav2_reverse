@@ -1996,3 +1996,12 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   regions (brighter room than the 0.767 run, dimmer than
   lab scenes). Live processing confirmed on the latest
   weights, not just the banked ones.
+
+## 2026-09-24 — PRE-REGISTERED Phase A1 (multi-scale GM)
+
+- Winner config (deepsup+cosine, clean protocol) + GM scales
+  1/0.5/0.25. Absolute-anchor variant DROPPED by reasoning
+  (meter is affine-invariant; absolute errors gate-irrelevant
+  — stated, no compute spent). Predicts overall >=0.99688
+  (beats combined best) with E0T0L0V0 min rising. Flat ->
+  supervision-specificity dead, move to Phase B.
