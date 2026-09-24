@@ -1743,3 +1743,15 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   machinery, never data volume.
 - Next: poison autopsy (which scenes? what stats?) to constrain
   generator ranges — the refinement loop's actual job spec.
+
+## 2026-09-24 — PRE-REGISTERED: poison autopsy
+
+- Reproduce synth-N60d0 indices (rng(0) consumption order);
+  stats screen (profile + activation norms vs d1/pool);
+  drop-one-out tokcorr screening (CPU) to rank suspects;
+  confirm by refit-minus-suspects + depth-gate (1 GPU run).
+- Predicts: 1-3 scenes carry the damage (removal restores
+  >=0.97); suspects are stat outliers (extreme edge/texture
+  or flat-black — generator range excess). Diffuse damage
+  (no single removal helps) -> conditioning story, not
+  poison scenes -> constrain overall ranges instead.
