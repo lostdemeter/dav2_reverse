@@ -1835,3 +1835,17 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Redesign (v2): dark enters the BASIN (augmented RRR
   covariances) + gentler photometrics. Pre-registered: init
   dark-eval starts higher; end dark >=0.90, clean >=0.996.
+
+## 2026-09-24 — Label flaw found + killed v2, v3 pre-registered
+
+- Teacher(dark)-vs-teacher(clean): 0.78 gentle / 0.75 strong
+  (min NEGATIVE). Darkening changes teacher predictions, so
+  v1/v2's dark-RGB->clean-label pairing mis-supervised dark
+  inputs — the student learned a mapping the teacher doesn't
+  implement, and dark-eval (vs teacher-on-dark) correctly
+  punished it. Killed v2 at ep14 (dark 0.76, clean 0.996).
+- v3 (correct-labels): STUDENT_DARKPOOL=N appends fixed dark
+  variants as first-class pairs; labels computed ON dark
+  images; RRR + gradients flow automatically. No online aug.
+  Pre-registered: dark-eval climbs from init (no crash);
+  clean holds >=0.996; saved webcam dark frames >=0.85.

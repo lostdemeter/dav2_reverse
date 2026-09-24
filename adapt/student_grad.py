@@ -36,6 +36,13 @@ DEEPSUP = float(__import__('os').environ.get('STUDENT_DEEPSUP', '0.0'))
 # Env STUDENT_AUGLOW=1 enables in the gradient phase (RRR init untouched).
 AUGLOW = __import__('os').environ.get('STUDENT_AUGLOW', '') == '1'
 AUGLOW_P = float(__import__('os').environ.get('STUDENT_AUGLOW_P', '0.5'))
+# v3 (correct-labels): precomputed dark scenes as FIRST-CLASS fit pairs
+# with teacher-on-dark labels (v1/v2's clean-label pairing was WRONG:
+# teacher(dark)-vs-teacher(clean) is 0.75-0.78, so clean labels
+# mis-supervise dark inputs). STUDENT_DARKPOOL=N darkens the first N
+# fit scenes once (seeded) and appends them; labels flow through
+# build_labels (staleness rebuild) and RRR covariances automatically.
+DARKPOOL_N = int(__import__('os').environ.get('STUDENT_DARKPOOL', '0'))
 # Gentle variant (v2): milder photometrics after v1's destructive
 # interference (dark-eval 0.93->0.70: off-manifold dark batches vs
 # clean RRR basin). v2 also augments the RRR covariances (basin
@@ -325,6 +332,17 @@ def main():
     hold_idx = set(range(0, npool, 12))
     fit_pairs = [p for i, p in enumerate(all_pool) if i not in hold_idx]
     hold_pairs = [all_pool[i] for i in sorted(hold_idx)]
+    if DARKPOOL_N > 0:
+        # v3: fixed dark variants (seeded) as first-class pairs. Labels
+        # are computed ON the dark images by build_labels below.
+        drank = np.random.default_rng(123)
+        darks = []
+        for rgb, _ref in fit_pairs[:DARKPOOL_N]:
+            darks.append((lowlight_augment(
+                rgb, drank, gentle=AUGLOW_GENTLE), None))
+        fit_pairs = fit_pairs + darks
+        print(f"darkpool: +{len(darks)} fixed dark pairs "
+              f"(gentle={AUGLOW_GENTLE})", flush=True)
     # targeted coverage (failmap 2026-09-22): fit is 100% real, student
     # fails synthetics it never saw. Mix exploration+retention synth
     # into fit; gate+audit stay eval-only.
