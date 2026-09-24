@@ -8,3 +8,4 @@ build/
 # Local-only baked phi weights (47MB, reproducible via export_geometric_weights.py).
 # Kept out of git so future GitHub push stays lean; regenerate locally.
 weights/geometric_*.npz
+weights/student_backbone_*.npz
