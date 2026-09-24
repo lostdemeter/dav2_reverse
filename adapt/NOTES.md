@@ -2042,3 +2042,18 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   0.25). Predicts E0 >=0.99 AND overall >=0.997 (both bars
   together). E0 flat again -> smooth representation is the
   wall -> Phase C / accept.
+
+## 2026-09-24 — OUTCOME AxB: E0 best-ever, overall drops (tension located)
+
+- Best 0.99578 (ep44). E0T0L0V0 0.98823 (best ever);
+  exploration-2 0.9756 (best ever, was 0.919-0.936).
+  Overall 0.99578 < A1 0.99702. Interaction half-holds:
+  dropping 0.25-scale GM fixes E0 (fine GM was hurting
+  smooth scenes) but weakens edge-scene supervision.
+- Tension located precisely: edge scenes want fine-scale GM,
+  smooth scenes want it gone; one global loss can't serve
+  both. Next (Phase A2, mechanism-derived): edge-weighted GM
+  — per-image GM weight from input edge stat (smooth scenes
+  get ~0 GM, textured get full). Predicts E0 holds >=0.988
+  AND overall returns >=0.997 (both bars together, for real
+  this time). Flat -> loss design exhausted, Phase C.
