@@ -1825,3 +1825,13 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Predicts: dark-eval/wet-cam fidelity rises (>=0.90 on saved
   dark frames); clean held-out holds >=0.996 (no aug
   regression). Clean regresses -> aug too strong, dial back.
+
+## 2026-09-24 — OUTCOME aug-v1: destructive interference, killed at ep9
+
+- Dark-eval 0.933 (init) -> 0.758 (ep4) -> 0.705 (ep9) while
+  clean held 0.995. Gradient-phase-only dark batches vs a
+  clean RRR basin: off-manifold gradients destroy rather
+  than teach. Killed (primary metric decisively worsening).
+- Redesign (v2): dark enters the BASIN (augmented RRR
+  covariances) + gentler photometrics. Pre-registered: init
+  dark-eval starts higher; end dark >=0.90, clean >=0.996.

@@ -36,6 +36,11 @@ DEEPSUP = float(__import__('os').environ.get('STUDENT_DEEPSUP', '0.0'))
 # Env STUDENT_AUGLOW=1 enables in the gradient phase (RRR init untouched).
 AUGLOW = __import__('os').environ.get('STUDENT_AUGLOW', '') == '1'
 AUGLOW_P = float(__import__('os').environ.get('STUDENT_AUGLOW_P', '0.5'))
+# Gentle variant (v2): milder photometrics after v1's destructive
+# interference (dark-eval 0.93->0.70: off-manifold dark batches vs
+# clean RRR basin). v2 also augments the RRR covariances (basin
+# includes dark) — the actual mechanism fix.
+AUGLOW_GENTLE = __import__('os').environ.get('STUDENT_AUGLOW_GENTLE', '') == '1'
 # Late layers unfrozen at small LR (absorbability lever). Env override
 # for sweeps without flag plumbing: STUDENT_UNFREEZE="9,10,11".
 LATE_LAYERS = tuple(int(x) for x in
@@ -228,20 +233,27 @@ def build_labels(shared, fit_pairs, force=False):
     return arr
 
 
-def lowlight_augment(rgb, rng):
+def lowlight_augment(rgb, rng, gentle=False):
     """Photometric dark-room transform (geometry-preserving).
 
-    Darken xU(0.25,0.6) + shadow clip (crushed blacks) + Gaussian
-    sensor noise + tint jitter. Mirrors the webcam failure regime.
+    v1 (strong): darken xU(0.25,0.6) + shadow clip + noise + tint.
+    v2 gentle: darken xU(0.5,0.8), minimal clip/noise/tint.
+    Mirrors the webcam failure regime.
     """
-    f = float(rng.uniform(0.25, 0.6))
+    if gentle:
+        f, clip_lo, clip_hi = float(rng.uniform(0.5, 0.8)), 0.0, 0.03
+        ns_lo, ns_hi, t_lo, t_hi = 0.002, 0.008, 0.9, 1.1
+    else:
+        f, clip_lo, clip_hi = float(rng.uniform(0.25, 0.6)), 0.02, 0.08
+        ns_lo, ns_hi, t_lo, t_hi = 0.005, 0.02, 0.8, 1.2
     out = np.clip(np.asanyarray(rgb, dtype=np.float32) * f, 0, 1)
-    clip = float(rng.uniform(0.02, 0.08))
-    out = np.where(out < clip, 0.0, (out - clip) / (1 - clip))
+    clip = float(rng.uniform(clip_lo, clip_hi))
+    if clip > 0:
+        out = np.where(out < clip, 0.0, (out - clip) / (1 - clip))
     out = np.clip(out + rng.normal(
-        0, float(rng.uniform(0.005, 0.02)), out.shape).astype(np.float32),
+        0, float(rng.uniform(ns_lo, ns_hi)), out.shape).astype(np.float32),
         0, 1)
-    tint = rng.uniform(0.8, 1.2, 3).astype(np.float32)
+    tint = rng.uniform(t_lo, t_hi, 3).astype(np.float32)
     return np.clip(out * tint, 0, 1).astype(np.float32)
 
 
@@ -334,12 +346,19 @@ def main():
     print(f"eval scenes: {len(eval_scenes)} (audit {len(fxa)}, "
           f"held-out reals {len(hold_pairs)})", flush=True)
 
-    # RRR covariances for init (reuse student_probe machinery)
+    # RRR covariances for init (reuse student_probe machinery).
+    # With AUGLOW the basin must include dark: augment a fraction of
+    # covariance scenes identically (mechanism fix for v1's destructive
+    # interference — clean-only basin vs dark gradient batches).
     import student_probe as SP
     covs = {li: {} for li in STUDENT_LAYERS}
     bb, pre = shared['backbone'], shared['preprocess']
+    cov_rng = np.random.default_rng(11)
     with torch.no_grad():
         for rgb, _ref in fit_pairs:
+            if AUGLOW and cov_rng.random() < AUGLOW_P:
+                rgb = lowlight_augment(rgb, cov_rng,
+                                       gentle=AUGLOW_GENTLE)
             cap = {}
             bb.forward_stages(pre(rgb).to(device), capture=cap)
             for li in STUDENT_LAYERS:
@@ -439,7 +458,8 @@ def main():
             for j in idx:
                 rgb = fit_pairs[j][0]
                 if AUGLOW and aug_rng.random() < AUGLOW_P:
-                    rgb = lowlight_augment(rgb, aug_rng)
+                    rgb = lowlight_augment(rgb, aug_rng,
+                                           gentle=AUGLOW_GENTLE)
                 pvs.append(shared['preprocess'](rgb))
             pv = torch.cat(pvs).to(device)  # preprocess gives [1,3,H,W] each
             tgt = Y[idx]
