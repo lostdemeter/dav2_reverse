@@ -1775,3 +1775,21 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   instability. What works: cap set size at the elbow (~10,
   gains nil past it anyway) + ridge scaling with N. The loop's
   job is conditioning control, not scene selection.
+
+## 2026-09-24 — OUTCOME webcam sanity: works live, dark-room gap diagnosed
+
+- Student runs live (25ms/frame post-warmup, plausible depths)
+  via student_webcam.py (teacher + student + optional HF side
+  by side). Sanity PASSES as a pipeline.
+- Fidelity on dark-room scene: student-vs-teacher 0.71-0.81
+  (mean 0.77) vs 0.996 held-out; teacher-vs-HF holds 0.96 on
+  the same frames. Gap is student-specific, scene-specific.
+- Ruled out: uniform darkness (0.3x costs 0.01, teacher holds
+  0.993); global photometrics (histogram EQ: helps 2/5, hurts
+  3/5). Remaining: dark textured low-light content itself —
+  crushed blacks + sensor noise + casts, a regime with ZERO
+  representation in fit (bright COCO + bright synth). Effect
+  direction matches all prior scene-interaction findings.
+- Fix path (not yet run): low-light augmentation (darken +
+  clip + noise + tint) in fit/training, re-gate. Targeted,
+  cheap, pre-register on launch.
