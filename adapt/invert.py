@@ -252,6 +252,12 @@ def main():
             m = 1.0 - float(fit.detach())
             hist.append(m)
             print(f"step {s + 1}/{args.steps}: match={m:.5f}", flush=True)
+        if (s + 1) % 100 == 0:
+            with torch.no_grad():
+                det = [(k, 1.0 - float((((Bd[k].float() - T[k]) ** 2).mean()
+                                        / scales[k]).detach())) for k in T]
+            print("   per-tensor: " + " ".join(f"{k}={v:.3f}"
+                                               for k, v in det), flush=True)
         if show and (s + 1) % 5 == 0:
             rec = denorm(canvas)
             tgt = cv2.resize(rgb, (rec.shape[1], rec.shape[0]))
