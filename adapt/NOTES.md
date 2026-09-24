@@ -2029,3 +2029,16 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   E0T0L0V0 mean >=0.99, overall holds >=0.997 (no coverage-shift
   regression). E0 flat -> coverage insufficient too; rethink
   smooth-scene representation (Phase C capacity).
+
+## 2026-09-24 — OUTCOME Phase B: E0 +0.003, overall -0.0008 (trade)
+
+- Best 0.99620 (ep19). E0T0L0V0 0.98443 (was 0.98178);
+  exploration-2 0.9360 (was 0.9191); audit-1 0.9912.
+  Coverage helps E0 marginally but dilutes everything else:
+  overall 0.99702 -> 0.99620. No bar passes.
+- Interaction hypothesis (mechanism-grade): fine-scale GM
+  (0.25) punishes smooth scenes; coverage supplies them; the
+  two fight. Test: synthpool100 + GM scales 1/0.5 only (drop
+  0.25). Predicts E0 >=0.99 AND overall >=0.997 (both bars
+  together). E0 flat again -> smooth representation is the
+  wall -> Phase C / accept.
