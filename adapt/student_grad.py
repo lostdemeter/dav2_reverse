@@ -43,6 +43,11 @@ AUGLOW_P = float(__import__('os').environ.get('STUDENT_AUGLOW_P', '0.5'))
 # fit scenes once (seeded) and appends them; labels flow through
 # build_labels (staleness rebuild) and RRR covariances automatically.
 DARKPOOL_N = int(__import__('os').environ.get('STUDENT_DARKPOOL', '0'))
+# Phase B (synth-gradient coverage): append N parametric-synth scenes
+# (E0-heavy pool) as first-class pairs with teacher-on-synth labels.
+# Same correct-labels machinery as DARKPOOL. E0 needs scenes in fit,
+# not sharper loss (A1 worsened exploration-2 0.971->0.919).
+SYNTHPOOL_N = int(__import__('os').environ.get('STUDENT_SYNTHPOOL', '0'))
 # Dark fraction of the final fit list (interference scales with
 # fraction; v3 ran 0.26). Subsamples the dark variants to hit it.
 DARKFRAC = float(__import__('os').environ.get('STUDENT_DARKFRAC', '0.0'))
@@ -73,7 +78,8 @@ BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{"_auglow" if AUGLOW else ""}'
                f'{f"_darkpool{DARKPOOL_N}" if DARKPOOL_N > 0 else ""}'
                f'{f"_f{DARKFRAC:g}" if DARKFRAC > 0 else ""}'
-               f'{f"_gms{GMSCALES_TAG}" if GMSCALES != (1.0,) else ""}')
+               f'{f"_gms{GMSCALES_TAG}" if GMSCALES != (1.0,) else ""}'
+               f'{f"_synthpool{SYNTHPOOL_N}" if SYNTHPOOL_N > 0 else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -517,6 +523,18 @@ def main():
     for _role in ('exploration', 'retention'):
         for _rgb, _ref, _cid in _fx[_role]:
             fit_pairs.append((_rgb, _ref))
+    if SYNTHPOOL_N > 0:
+        # Phase B: parametric-synth scenes (E0-heavy) as first-class
+        # pairs with teacher-on-synth labels (same correct-labels
+        # machinery as DARKPOOL). E0 needs scenes in fit (A1
+        # worsened exploration-2 by sharpening loss without them).
+        _zs = np.load(ADAPT / 'fixtures' / 'synth_pool.npz',
+                      allow_pickle=True)
+        for i in range(min(SYNTHPOOL_N, len(_zs['rgb']))):
+            fit_pairs.append((_zs['rgb'][i].astype(np.float32) / 255.0,
+                              None))
+        print(f"synthpool: +{min(SYNTHPOOL_N, len(_zs['rgb']))} "
+              f"parametric scenes", flush=True)
     print(f"train {len(fit_pairs)} (incl. 9 synth), held-out reals "
           f"{len(hold_pairs)}", flush=True)
 

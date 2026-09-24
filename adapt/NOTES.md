@@ -2020,3 +2020,12 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   fit), not sharper loss. exploration-2 (0.919) is now the
   single worst scene and the cleanest target in program
   history.
+
+## 2026-09-24 — PRE-REGISTERED Phase B (synth-gradient coverage)
+
+- Winner config (deepsup+gms+cosine, clean) + 100 parametric
+  synth scenes (E0-heavy) as first-class pairs, teacher labels
+  via staleness rebuild. Predicts: exploration-2 rises >=0.97,
+  E0T0L0V0 mean >=0.99, overall holds >=0.997 (no coverage-shift
+  regression). E0 flat -> coverage insufficient too; rethink
+  smooth-scene representation (Phase C capacity).
