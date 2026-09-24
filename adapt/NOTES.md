@@ -1902,3 +1902,18 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Sequence update: unfreeze-late@real-LR (still open) drops
   below factored-verify + encode in priority — dark work is
   closed, ship the clean winner.
+
+## 2026-09-24 — Clobber confirmed; encode plan (bank cosine-0.99624)
+
+- Combined 0.99688 UNRECOVERABLE (file holds first-v3 ep4
+  0.98267; runs/ gitignored). 6e-4 above surviving best —
+  NOT worth 3h to re-earn; noted as optional rerun.
+- Encode candidate: cosine-only r128 (0.99624, best surviving
+  bottleneck mean; deepsup 0.99619 best floor noted).
+  Fullwidth file (0.99639) excluded: full-size maps, nothing
+  to compress — retrained teacher, not a student.
+- Encode = phi-encoded student backbone npz (drop-in for the
+  geometric loader: L0-2 maps phi-quantized, rest teacher
+  baked) + integer-path parity + (follow-up, stated) C
+  assembly from existing kernels. Factored mirror verifies
+  at maxabs 1.1e-4 (rounding order, expected).
