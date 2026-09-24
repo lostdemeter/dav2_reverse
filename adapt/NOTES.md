@@ -1862,3 +1862,28 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   collision is a data-loss bug, treated as such.
 - Cost: champion must be re-earned if needed for encode.
   Mitigation accepted; combined config re-runnable exactly.
+
+## 2026-09-24 — OUTCOME v3: dark oscillates, never stabilizes (killed ep34)
+
+- Dark-eval: 0.939 init -> dip 0.868 -> climb 0.920 -> crash
+  0.825 -> 0.877/0.896, min stuck ~0.5. Clean held 0.994-0.996
+  throughout. Correct labels fixed the DIRECTION (no more
+  monotonic collapse) but not the VOLATILITY: shared rank-128
+  bottleneck alternates between regimes (capacity competition).
+- Next: effrank-on-dark diagnostic (does dark need different/
+  more subspace directions?) BEFORE any rank-192 run — quantify,
+  then decide. Killed v3 (pattern established over 30 epochs).
+
+## 2026-09-24 — Subspace overlap kills capacity story; interference test
+
+- Effrank clean-vs-dark: identical rank (L0 101/152 vs
+  106/170; L5/L11 identical). Top-128 subspace overlap
+  0.91-0.93 (vs ~0.06 random): SAME span, different
+  loss-landscapes. Bottleneck capacity exonerated twice;
+  remaining mechanism is optimization interference across
+  regimes sharing one span.
+- Test (pre-registered): dark fraction 0.26 -> 0.15 (same
+  v3 design otherwise). Interference scales with fraction:
+  dark stabilizes >=0.90 sustained + clean holds >=0.996.
+  Still oscillates -> accept dark limitation, bank combined,
+  move to factored inference + encode.
