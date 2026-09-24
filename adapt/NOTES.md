@@ -1917,3 +1917,18 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   baked) + integer-path parity + (follow-up, stated) C
   assembly from existing kernels. Factored mirror verifies
   at maxabs 1.1e-4 (rounding order, expected).
+
+## 2026-09-24 — OUTCOME bank: phi cost 1e-5, artifact exact
+
+- Banked npz (41.7MB, 5.3M student params phi-encoded, rest
+  teacher): 12-scene subset mean 0.99498/min 0.97225 —
+  IDENTICAL to float factors (0.99499/0.97230) to 4dp. Gate
+  weakness lives in the checkpoint, not the encoding. Integer
+  bake path accepts the npz (bake_layer_fixed ran clean).
+- Factored mirror: maxabs 1.1e-4 vs composed (rounding order);
+  measured 1.06x (8.4->8.0ms) — attention/norms dominate, not
+  linears. torch.compile fails (env inductor bug, not our
+  code). Speed win banked as-is (12% smaller, 6% faster).
+- Remaining encode: C-assembly from existing kernels
+  (follow-up, stated — kernels all wired, firmware assembly
+  untracked here). Receipt: adapt/runs/student_banked.json.
