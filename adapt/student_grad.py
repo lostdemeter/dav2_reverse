@@ -59,6 +59,11 @@ LATE_LAYERS = tuple(int(x) for x in
 LATE_LR = float(__import__('os').environ.get('STUDENT_LATE_LR', '1e-6'))
 MAPS = ("q.weight", "k.weight", "v.weight", "proj.weight",
         "mlp1.weight", "mlp2.weight")
+# Multi-scale gradient-matching scales (Phase A): edge/texture
+# structure is scale-dependent. "1.0" = legacy single-scale.
+GMSCALES = tuple(float(x) for x in
+                 __import__('os').environ.get('STUDENT_GMSCALES', '1.0').split(','))
+GMSCALES_TAG = "_".join(str(x).replace('.', 'p') for x in GMSCALES)
 LABEL_CACHE = ADAPT / 'runs' / 'grad_labels.npz'
 BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{"_ul" + "-".join(map(str, LATE_LAYERS)) if LATE_LAYERS else ""}'
@@ -67,7 +72,8 @@ BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{"_fw" if FULLWIDTH else ""}'
                f'{"_auglow" if AUGLOW else ""}'
                f'{f"_darkpool{DARKPOOL_N}" if DARKPOOL_N > 0 else ""}'
-               f'{f"_f{DARKFRAC:g}" if DARKFRAC > 0 else ""}')
+               f'{f"_f{DARKFRAC:g}" if DARKFRAC > 0 else ""}'
+               f'{f"_gms{GMSCALES_TAG}" if GMSCALES != (1.0,) else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -405,14 +411,19 @@ def lowlight_augment(rgb, rng, gentle=False):
 
 
 def ssi_gm_loss(pred, target):
-    """SSI (lstsq scale+shift align + MAE) + 2x Sobel-grad L1, top-10% mask."""
+    """SSI (lstsq scale+shift align + MAE) + multi-scale Sobel-grad L1.
+
+    GMSCALES env (default "1.0" = legacy single-scale): gradient term
+    averaged over downsampled copies (edge/texture structure is
+    scale-dependent — our strata split on it). Top-10% residual mask
+    (downsampled per scale) throughout.
+    """
     import torch
     import torch.nn.functional as F
+    scales = GMSCALES
     B = pred.shape[0]
     p = pred.reshape(B, -1).double()
     t = target.reshape(B, -1).double()
-    # 2x2 normal equations (lstsq driver materializes full U on 268k rows
-    # -> TBs; closed form is exact for 2 unknowns).
     n = p.shape[1]
     sp, st = p.sum(1), t.sum(1)
     spp, spt = (p * p).sum(1), (p * t).sum(1)
@@ -430,11 +441,21 @@ def ssi_gm_loss(pred, target):
     Kx = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
                       device=pred.device, dtype=pred.dtype).view(1, 1, 3, 3)
     Ky = Kx.transpose(-1, -2)
-    ga = F.conv2d(aligned, Kx, padding=1).abs() + F.conv2d(aligned, Ky,
-                                                           padding=1).abs()
-    gt = F.conv2d(T4, Kx, padding=1).abs() + F.conv2d(T4, Ky,
+    gm_terms = []
+    for sc in scales:
+        if sc == 1.0:
+            A, Tt, M = aligned, T4, mask
+        else:
+            A = F.interpolate(aligned, scale_factor=sc, mode='bilinear',
+                              align_corners=True)
+            Tt = F.interpolate(T4, scale_factor=sc, mode='bilinear',
+                               align_corners=True)
+            M = F.interpolate(mask, scale_factor=sc, mode='nearest')
+        ga = F.conv2d(A, Kx, padding=1).abs() + F.conv2d(A, Ky, padding=1).abs()
+        gt = F.conv2d(Tt, Kx, padding=1).abs() + F.conv2d(Tt, Ky,
                                                           padding=1).abs()
-    gm = (((ga - gt).abs()) * mask).sum() / mask.sum().clamp_min(1.0)
+        gm_terms.append((((ga - gt).abs()) * M).sum() / M.sum().clamp_min(1.0))
+    gm = torch.stack(gm_terms).mean()
     return mae + 2.0 * gm, mae.detach(), gm.detach()
 
 
