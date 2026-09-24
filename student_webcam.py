@@ -105,7 +105,8 @@ def main():
     outdir.mkdir(exist_ok=True)
 
     def process(rgb_float):
-        pv = pre(rgb_float, size=args.size).to(device)
+        from geo_depth import preprocess
+        pv = preprocess(rgb_float, size=args.size).to(device)
         with torch.no_grad():
             fmaps, ph, pw = student.forward_backbone(pv)
             fused = neck(fmaps)
