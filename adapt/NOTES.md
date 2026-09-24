@@ -1932,3 +1932,14 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Remaining encode: C-assembly from existing kernels
   (follow-up, stated — kernels all wired, firmware assembly
   untracked here). Receipt: adapt/runs/student_banked.json.
+
+## 2026-09-24 — OUTCOME banked webcam re-test: 0.975 (light-dependent)
+
+- Banked cosine student live: student-vs-teacher 0.959-0.988
+  (mean 0.975), student-vs-HF 0.984-0.992. Different view,
+  dim-but-structured scene (cables/fabric, still darkish).
+- vs prior 0.767 run: same room, different light/composition.
+  Corroborates the diagnosis directionally (fidelity tracks
+  illumination regime, not pipeline): bright/structure good,
+  near-black fails. The accepted dark limitation stands with
+  a live number on each side.
