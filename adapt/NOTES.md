@@ -2221,3 +2221,13 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   within rank-192. Weights->behavior is too entangled here
   for local post-hoc edits; the knobs that work are
   training-time (loss/data). Framework discussion now open.
+
+## 2026-09-25 — Theory note drafted (convergence operator)
+
+- adapt/CONVERGENCE_OPERATOR.md: survey/reshape/traverse as one
+  operator C(W,F) with halting predicate F=∅; contractivity
+  conjecture + ledger evidence; refusal semantics (3 instances);
+  repertoire-ceiling; lattice-native move readings; dark-thread
+  stress test (contracts F_gated; acceptance is operator
+  behavior); 4 open questions. For upstream proposal only
+  after in-repo review.
