@@ -25,9 +25,9 @@ import copy
 CKPTS = [
     'student_grad_best_r128_cos.pt',
     ('student_grad_best_r128_ds0.1_gms1p0_0p5_0p25_synthpool100_'
-     'edgew_detailw_structmask_cos.pt'),
+     'edgew_cos.pt'),
     ('student_grad_best_r192_ds0.1_gms1p0_0p5_0p25_synthpool100_'
-     'edgew_detailw_structmask_cos.pt'),
+     'edgew_cos.pt'),
 ]
 N_BOOT = 10000
 
