@@ -662,6 +662,9 @@ def main():
     global BEST
     if args.schedule == 'cosine':
         BEST = ADAPT / 'runs' / (BEST_STEM + '_cos.pt')
+    if TRACE:
+        # never clobber a real best with an instrumented rerun
+        BEST = BEST.with_name(BEST.stem + '_trace.pt')
     best, best_state = -1.0, None
 
     from geo_neck import GeometricNeck
