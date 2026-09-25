@@ -24,6 +24,9 @@ import copy
 RANK = int(__import__('os').environ.get('STUDENT_RANK', '128'))
 STUDENT_LAYERS = (0, 1, 2)
 RANDOM_INIT = __import__('os').environ.get('STUDENT_RANDOM_INIT', '') == '1'
+# Full-width mode: direct (W,b) Parameters per map, teacher-exact init.
+# No bottleneck, no RRR — isolates narrowing-vs-training causally.
+FULLWIDTH = __import__('os').environ.get('STUDENT_FULLWIDTH', '') == '1'
 # Joint-bias mode (chords-not-notes test): train ALL early biases
 # jointly from the banked Phase-E start, A/B frozen. Greedy singles
 # failed (Phase G 0/324); joint optimization may preserve floors
