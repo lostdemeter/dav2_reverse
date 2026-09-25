@@ -2322,3 +2322,16 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   arrow at scene or layer level — parallel, not sequential.
   A-seq's advantage was conditioning, not order. C's reshape
   step stays atomic. Theory note updated accordingly.
+
+## 2026-09-25 — Audit green: all three claims executable
+
+- adapt/audit_operator.py ALL PASS: 7 turns classified (all
+  5 ops used); contractivity (strict); 6 refusals w/
+  mechanisms; live RRR-init gate 0.99138 (40 scenes,
+  rank-192); polish bound (init jump 0.081 vs max gradient
+  turn 0.012); remainders registered, 7/31 tied.
+- The audit forced two corrections: (1) rank-128->192 turn
+  REMOVED (double-counted inside A-seq numbers — caught by
+  the gaps assertion, not by reading); (2) polish bound
+  restated as init-vs-gradient comparison, not an absolute.
+  Executable checks earn their keep against prose.
