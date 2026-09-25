@@ -2244,3 +2244,21 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   SV-scale (F2 precedent: destructive); attention-bias reroute;
   norm-scale tweaks; readout-mix coefficients; opcode COMPOSITION
   (kept-op chaining with re-gating) only if singles ever keep.
+
+## 2026-09-25 — OUTCOME Phase G: clean refusal, knife-edge Pareto-tightness
+
+- 0/324 ADD_IMM ops kept. Mean deltas +-1e-5 (bias moves at
+  0.1-1% barely move the mean at all); but floors trigger
+  almost everywhere (hold-23 breaks on 309/324 trials).
+  Best trials (+1e-5) still floor 15-26 scenes.
+- Mechanism: trained weights sit at a sharp joint optimum
+  across scenes — every single-instruction direction hurts
+  something while helping nothing. No slack exists for greedy
+  single moves; the floor constraint (not the mean) is what
+  refuses everything.
+- Phase F+G verdict (all negative, all clean): F1 deltas too
+  big (30-96% norms), F2 directions destructive, G moves too
+  weak (+-1e-5) yet still floor-breaking. Post-hoc discrete
+  ops look dead at every granularity tried. The language, if
+  it exists, is writable only at training time (joint
+  optimization preserves floors; isolated moves cannot).
