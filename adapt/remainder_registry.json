@@ -1,14 +1,62 @@
-{"note": "Every non-tied scene in certificate.json must appear here with a mechanism. A remainder without a mechanism is a shrug, not a resting state.",
+{
+ "note": "Every non-tied scene in certificate.json must appear here with a mechanism. A remainder without a mechanism is a shrug, not a resting state.",
  "remainders": [
-  {"gap": "student 0.97-0.99 vs teacher ~1.0 on smooth gradients",
+  {
+   "gap": "student 0.97-0.99 vs teacher ~1.0 on smooth gradients",
    "mechanism": "narrowed early maps under-resolve smooth low-variance activations; rank-192 closed most of it, residual is capacity",
    "notes_ref": "NOTES 2026-09-24 Phase E + failmap8",
-   "scene": "E0T0L0V0 (exploration-2, gate-0, audit-2)"},
-  {"gap": "student-vs-teacher ~0.77-0.92 on darkened scenes; oscillates under joint training",
+   "scene": "E0T0L0V0 (exploration-2, gate-0, audit-2)",
+   "quant": {
+    "gap_mean": 0.006494,
+    "gap_ci95": [
+     0.003428,
+     0.009911
+    ],
+    "n_gaps": 18,
+    "checkpoints": [
+     "student_grad_best_r128_cos",
+     "student_grad_best_r128_ds0.1_gms1p0_0p5_0p25_synthpool100_edgew_cos",
+     "student_grad_best_r192_ds0.1_gms1p0_0p5_0p25_synthpool100_edgew_cos"
+    ]
+   }
+  },
+  {
+   "gap": "student-vs-teacher ~0.77-0.92 on darkened scenes; oscillates under joint training",
    "mechanism": "regime competition in shared rank-128 bottleneck (same span per overlap 0.92, different loss landscapes); accepted, not fixed",
    "notes_ref": "NOTES 2026-09-24 dark thread (v3, fraction test, overlap)",
-   "scene": "dark-room / low-light webcam scenes"},
-  {"gap": "min 0.98688 on banked artifact (12-scene subset)",
+   "scene": "dark-room / low-light webcam scenes",
+   "quant": {
+    "gap_mean": 0.147178,
+    "gap_ci95": [
+     0.040928,
+     0.312389
+    ],
+    "n_gaps": 12,
+    "checkpoints": [
+     "student_grad_best_r128_cos",
+     "student_grad_best_r128_ds0.1_gms1p0_0p5_0p25_synthpool100_edgew_cos",
+     "student_grad_best_r192_ds0.1_gms1p0_0p5_0p25_synthpool100_edgew_cos"
+    ]
+   }
+  },
+  {
+   "gap": "min 0.98688 on banked artifact (12-scene subset)",
    "mechanism": "tail of the E0/dark distribution; bounded below, monitored per release",
    "notes_ref": "NOTES 2026-09-24 bank receipt (student_banked.json)",
-   "scene": "banked-artifact tail scenes"}]}
+   "scene": "banked-artifact tail scenes",
+   "quant": {
+    "gap_mean": 0.012743,
+    "gap_ci95": [
+     0.009766,
+     0.016061
+    ],
+    "n_gaps": 18,
+    "checkpoints": [
+     "student_grad_best_r128_cos",
+     "student_grad_best_r128_ds0.1_gms1p0_0p5_0p25_synthpool100_edgew_cos",
+     "student_grad_best_r192_ds0.1_gms1p0_0p5_0p25_synthpool100_edgew_cos"
+    ]
+   }
+  }
+ ]
+}
