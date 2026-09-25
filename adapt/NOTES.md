@@ -2078,3 +2078,17 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   synthpool — capacity for the union. Pre-registered: E0
   holds >=0.99 AND overall >=0.99702 (beats both parents).
   Flat -> accept nearest-equivalent, run Phase D certificate.
+
+## 2026-09-24 — OUTCOME Phase C: both bars PASS (0.99726 / E0 0.994)
+
+- Best ep84 0.99726 (24/54, min 0.98126). E0T0L0V0 0.99383;
+  exploration-2 0.9984 (HOLDS — was 0.919 under A1).
+  Pre-registered bars pass: overall >=0.99702 ✓, E0 >=0.99 ✓.
+- Capacity for the union CONFIRMED (rank-192 + edgeweight +
+  synthpool beats both parents on both axes). Rank-192 RRR
+  init alone started at 0.99743 — capacity was the missing
+  ingredient for the union all along; gradients added the
+  last +0.0005 and the pass count (16 -> 24).
+- Remaining: Phase D certificate (margin-gated parity per
+  stratum — E0 0.9938 vs seed-calibrated margin ~0.0003 will
+  NOT tie; the certificate documents nearest-equivalent).
