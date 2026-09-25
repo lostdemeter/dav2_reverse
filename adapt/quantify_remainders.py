@@ -23,11 +23,14 @@ import json
 import copy
 
 CKPTS = [
-    'student_grad_best_r128_cos.pt',
+    # (filename, rank) — separate invocations per rank (module-level
+    # RANK binds factor shapes at import; mixing ranks needs a worker
+    # per rank, not one process).
+    ('student_grad_best_r128_cos.pt', 128),
     ('student_grad_best_r128_ds0.1_gms1p0_0p5_0p25_synthpool100_'
-     'edgew_cos.pt'),
+     'edgew_cos.pt', 128),
     ('student_grad_best_r192_ds0.1_gms1p0_0p5_0p25_synthpool100_'
-     'edgew_cos.pt'),
+     'edgew_cos.pt', 192),
 ]
 N_BOOT = 10000
 
@@ -82,7 +85,20 @@ def main():
 
     gaps = {"e0_smooth": [], "dark": [], "tail": []}
     import student_grad as SG
-    for ckpt_name in CKPTS:
+    import subprocess as _sp
+    import os as _os
+    # Module-level RANK binds factor shapes at import: group
+    # checkpoints by rank, one worker process per rank.
+    groups = {}
+    for _c, _r in CKPTS:
+        groups.setdefault(_r, []).append(_c)
+    only = sorted(groups[int(_os.environ.get('QUANT_RANK_ONLY', '0') or '0')]) \
+        if _os.environ.get('QUANT_RANK_ONLY') else None
+    todo = only or [c for _, cs in groups.items() for c in cs]
+    ckpt_rank = {c: r for r, cs in groups.items() for c in cs}
+    out_part = (ADAPT / 'runs' /
+                f"quant_gaps_r{_os.environ.get('QUANT_RANK_ONLY', 'all')}.json")
+    for ckpt_name in todo:
         student = SG.StudentBackbone(shared['backbone'])
         ckpt = torch.load(ADAPT / 'runs' / ckpt_name, map_location=device,
                           weights_only=False)
@@ -128,22 +144,9 @@ def main():
               f"tail={np.mean(gaps['tail'][-6:]):.5f}", flush=True)
 
     rng = np.random.default_rng(0)
-    reg = json.load(open(ADAPT / 'remainder_registry.json'))
-    keymap = [("e0_smooth", 0), ("dark", 1), ("tail", 2)]
-    for key, ri in keymap:
-        v = np.array(gaps[key])
-        boots = np.array([np.mean(rng.choice(v, len(v), replace=True))
-                          for _ in range(N_BOOT)])
-        lo, hi = float(np.quantile(boots, 0.025)), float(np.quantile(boots, 0.975))
-        reg["remainders"][ri]["quant"] = {
-            "gap_mean": round(float(v.mean()), 6),
-            "gap_ci95": [round(lo, 6), round(hi, 6)],
-            "n_gaps": len(v),
-            "checkpoints": [Path(c).stem for c in CKPTS]}
-        print(f"{key}: gap_mean={v.mean():.5f} ci95=[{lo:.5f},{hi:.5f}] "
-              f"n={len(v)}", flush=True)
-    (ADAPT / 'remainder_registry.json').write_text(json.dumps(reg, indent=1))
-    print("wrote quantitative bounds -> remainder_registry.json", flush=True)
+    (ADAPT / 'runs' / f"quant_gaps_tmp_{_os.getpid()}.json").write_text(
+        json.dumps({"gaps": gaps, "ckpts": todo}, indent=1))
+    print(f"wrote per-worker gaps ({len(todo)} ckpts)", flush=True)
 
 
 if __name__ == '__main__':

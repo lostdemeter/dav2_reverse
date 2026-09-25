@@ -157,6 +157,21 @@ def check_remainders():
     assert total - ties > 0, "certificate vacuous?"
 
 
+def check_quant_bounds():
+    import numpy as np
+    reg = json.load(open(ADAPT / 'remainder_registry.json'))
+    for r in reg["remainders"]:
+        q = r.get("quant")
+        assert q, f"no quantitative bounds: {r['scene']}"
+        assert q["gap_mean"] >= 0, f"negative gap: {r['scene']}"
+        lo, hi = q["gap_ci95"]
+        assert lo <= q["gap_mean"] <= hi, f"mean outside CI: {r['scene']}"
+        assert (hi - lo) < 0.05, f"CI too wide (uninformative): {r['scene']}"
+        assert len(q["checkpoints"]) >= 3, f"fewer than 3 ckpts: {r['scene']}"
+        print(f"  {r['scene'][:28]:28s} gap={q['gap_mean']:.5f} "
+              f"ci95=[{lo:.5f},{hi:.5f}] n={q['n_gaps']}")
+
+
 def main():
     ledger = json.load(open(ADAPT / 'operator_ledger.json'))
     check_alphabet(ledger)
@@ -165,6 +180,7 @@ def main():
     check_split_live()
     check_polish_bound(ledger)
     check_remainders()
+    check_quant_bounds()
     print("AUDIT OPERATOR: ALL PASS")
 
 
