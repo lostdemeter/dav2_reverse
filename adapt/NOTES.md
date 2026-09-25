@@ -2335,3 +2335,15 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   the gaps assertion, not by reading); (2) polish bound
   restated as init-vs-gradient comparison, not an absolute.
   Executable checks earn their keep against prose.
+
+## 2026-09-25 — Opcodes status + quantify_remainders (hardening)
+
+- Opcode program: F1 (deltas 30-96% norms, destroys), F2
+  (trailing-SV scaling, monotonic destruction), G (0/324,
+  knife-edge floors) — all negative with mechanisms. No
+  single-move alphabet exists post-hoc; the reusable artifact
+  is the diagnosis-to-retraining loop + floor-criterion.
+- Hardening: quantify_remainders.py measures each registry
+  gap across 3 checkpoints (r128_cos, r128_edgew, r192C)
+  with bootstrap CI95 (10k resamples over scenes). Audit
+  extended: bounds present + CI width sane + same 3-ckpt set.
