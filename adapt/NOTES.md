@@ -2206,3 +2206,18 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   irreducible theme: corr 0.989 hides weight-space distance.
   Framework implication (for later): edits need either full-
   rank freedom or a different basis than per-map deltas.
+
+## 2026-09-25 — OUTCOME F2: detail-gain knob FAILS (trailing SVs ≠ detail)
+
+- gain=1.25: mean 0.99687 (down 0.001); 1.5: 0.98661
+  (gate scenes -0.12); 2.0: 0.95546 (hold-44 -0.30).
+  Monotonic destruction with gain; no scene class benefits
+  (top-5 improved are sub-millipoint noise except one hold).
+  Prediction fails: trailing singular directions are NOT a
+  detail reservoir — training suppressed them (or they are
+  noise), and amplifying them amplifies damage.
+- Phase F verdict: neither additive correction (F1) nor
+  multiplicative reweighting (F2) edits the student usefully
+  within rank-192. Weights->behavior is too entangled here
+  for local post-hoc edits; the knobs that work are
+  training-time (loss/data). Framework discussion now open.
