@@ -2394,3 +2394,22 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   directions = literal missing dimension?) against library
   primitives. Flat (~0.9979) -> no single map class carries
   it; scope question closed, concede edits.
+
+## 2026-09-25 — OUTCOME mapsel: flat (0.99776), shape question answered
+
+- All-mlp2 dense (1.8M params) from banked start: best 0.99776
+  (ep~89), BELOW banked 0.99788. Full-rank freedom on the
+  highest-leverage map class buys nothing over rank-192
+  factors. Deltas: rel-norm 0.0000 to 4dp — training barely
+  moved the maps at all (stationarity, like joint-bias).
+- Shape-thesis verdict: NO missing dimension in mlp2. The
+  rank-192 span already contains everything joint training
+  can use; extra 192 dims sit idle. Combined with blockfit
+  (L0 compressible, late not) and effrank (full-rank
+  weights): the shape is subspace-hierarchy, fully mapped.
+  Scope question CLOSED (biases -> map class -> concede).
+- Edits program, final: F1 too big, F2 wrong dirs, G too
+  weak, joint-bias stationary, mapsel idle. Post-hoc AND
+  scoped-retraining moves both exhausted. Remaining valid
+  moves are full-pipeline training-time (loss/data) or
+  nothing. Framework discussion may now proceed on evidence.
