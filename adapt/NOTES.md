@@ -2124,3 +2124,14 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   green) + docs/proposals/margin-gates.md follow-up.
   PR itself needs opening (no gh CLI here) — compare URL:
   github.com/lostdemeter/adaptation_foundry/compare/main...feature/baseline-gate
+
+## 2026-09-24 — Phase-C best live: 0.995 vs teacher (sanity PASSES)
+
+- Highest-accuracy student (r192, 0.99726) on webcam:
+  0.992-0.996 vs teacher (mean 0.9949), 0.990-0.996 vs HF,
+  24ms/frame. Mixed-light room (bright curtain + dark
+  corners + cables); student tracks teacher across regimes
+  including dim regions. Best live numbers in program
+  history (0.767 -> 0.975 -> 0.991 -> 0.995 across runs).
+- Webcam arc corroborates the lab arc: fidelity climbs with
+  the training program, dark extreme remains the known gap.
