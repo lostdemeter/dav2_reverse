@@ -24,9 +24,14 @@ import copy
 RANK = int(__import__('os').environ.get('STUDENT_RANK', '128'))
 STUDENT_LAYERS = (0, 1, 2)
 RANDOM_INIT = __import__('os').environ.get('STUDENT_RANDOM_INIT', '') == '1'
-# Full-width mode: direct (W,b) Parameters per map, teacher-exact init.
-# No bottleneck, no RRR — isolates narrowing-vs-training causally.
-FULLWIDTH = __import__('os').environ.get('STUDENT_FULLWIDTH', '') == '1'
+# Joint-bias mode (chords-not-notes test): train ALL early biases
+# jointly from the banked Phase-E start, A/B frozen. Greedy singles
+# failed (Phase G 0/324); joint optimization may preserve floors
+# where isolated moves cannot. Init ckpt via STUDENT_BIASONLY_INIT.
+BIASONLY = __import__('os').environ.get('STUDENT_BIASONLY', '') == '1'
+BIASONLY_INIT = __import__('os').environ.get(
+    'STUDENT_BIASONLY_INIT',
+    str(ADAPT / 'runs' / 'student_grad_best_r192_ds0.1_gms1p0_0p5_0p25_synthpool100_edgew_detailw_structmask_cos.pt'))
 # Deep supervision: student L0-2 layer-outs vs teacher layer-outs
 # (online teacher forward, no_grad), variance-normalized MSE x lambda.
 # 0 = off (legacy depth-only loss).
@@ -97,7 +102,8 @@ BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{f"_synthpool{SYNTHPOOL_N}" if SYNTHPOOL_N > 0 else ""}'
                f'{"_edgew" if EDGEW else ""}'
                f'{"_detailw" if DETAILW else ""}'
-               f'{"_structmask" if STRUCTMASK else ""}')
+               f'{"_structmask" if STRUCTMASK else ""}'
+               f'{"_biasonly" if BIASONLY else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -160,11 +166,32 @@ class StudentBackbone:
         if FULLWIDTH:
             ps = [p for tup in self.full.values() for p in tup
                   if p is not None]
+        if BIASONLY:
+            # biases only, A/B frozen (set requires_grad in init_banked)
+            ps = [tup[2] for tup in self.factors.values()]
         return ps
 
     def late_parameters(self):
         return [p for tup in self.late.values() for p in tup
                 if p is not None]
+
+    def init_banked(self, path=None):
+        """Load a banked checkpoint's factors (for BIASONLY start)."""
+        import torch
+        ckpt = torch.load(path or BIASONLY_INIT, map_location=self.device,
+                          weights_only=False)
+        print(f"banked init: {path or BIASONLY_INIT} "
+              f"mean_corr={ckpt.get('mean_corr', float('nan')):.5f}",
+              flush=True)
+        with torch.no_grad():
+            for (li, m), tup in ckpt['factors'].items():
+                A, B, b = self.factors[(li, m)]
+                A.copy_(tup[0].to(self.device))
+                B.copy_(tup[1].to(self.device))
+                b.copy_(tup[2].to(self.device))
+                if BIASONLY:
+                    A.requires_grad_(False)
+                    B.requires_grad_(False)
 
     def rrr_init(self, covs):
         """Init factors from RRR solutions (skipped when RANDOM_INIT
@@ -621,7 +648,10 @@ def main():
     print("RRR covariances done.", flush=True)
 
     student = StudentBackbone(shared['backbone'])
-    student.rrr_init(covs)
+    if BIASONLY:
+        student.init_banked()  # banked Phase-E start, A/B frozen inside
+    else:
+        student.rrr_init(covs)
     # Trace mode (sequentiality probe): per-scene corrs + per-layer/map
     # factor drift from init, recorded at every gate eval.
     TRACE = __import__('os').environ.get('STUDENT_TRACE', '') == '1'

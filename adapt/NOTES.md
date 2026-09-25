@@ -2355,3 +2355,15 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   checkpoint-sensitive, clean gaps are not. The audit accepts
   this explicitly (carve-out with reason) rather than hiding
   behind a threshold — same honesty rule as the margins.
+
+## 2026-09-25 — PRE-REGISTERED joint-bias run (chords, not notes)
+
+- Phase G proved greedy SINGLE-bias moves fail (0/324). This
+  tests JOINT gradient training over all ~7k early biases
+  (L0-2, all maps) from the Phase-E banked start, A/B frozen.
+  Same labels/loss/protocol/gates. Recompile at minimum
+  scope: if floors can be preserved anywhere post-hoc, here.
+- Predictions: audit-1 >=0.995 with no floors -> opcode
+  language exists as JOINT moves (chords-not-notes reframes
+  G entirely). Flat (audit-1 unmoved, mean ~0.9979) -> biases
+  lack the degrees of freedom; go wider or concede scope.
