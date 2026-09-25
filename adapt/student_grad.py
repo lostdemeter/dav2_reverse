@@ -69,6 +69,12 @@ MAPS = ("q.weight", "k.weight", "v.weight", "proj.weight",
 GMSCALES = tuple(float(x) for x in
                  __import__('os').environ.get('STUDENT_GMSCALES', '1.0').split(','))
 GMSCALES_TAG = "_".join(str(x).replace('.', 'p') for x in GMSCALES)
+# Phase A2 (edge-weighted GM): per-image gradient-loss weight from
+# the input's edge statistic (AxB located the tension: edge scenes
+# want fine GM, smooth scenes want it gone). STUDENT_EDGEW=1 enables;
+# weights precomputed once (deterministic), MAE stays unweighted.
+EDGEW = __import__('os').environ.get('STUDENT_EDGEW', '') == '1'
+GMSCALES_TAG = "_".join(str(x).replace('.', 'p') for x in GMSCALES)
 LABEL_CACHE = ADAPT / 'runs' / 'grad_labels.npz'
 BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{"_ul" + "-".join(map(str, LATE_LAYERS)) if LATE_LAYERS else ""}'
@@ -79,7 +85,8 @@ BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{f"_darkpool{DARKPOOL_N}" if DARKPOOL_N > 0 else ""}'
                f'{f"_f{DARKFRAC:g}" if DARKFRAC > 0 else ""}'
                f'{f"_gms{GMSCALES_TAG}" if GMSCALES != (1.0,) else ""}'
-               f'{f"_synthpool{SYNTHPOOL_N}" if SYNTHPOOL_N > 0 else ""}')
+               f'{f"_synthpool{SYNTHPOOL_N}" if SYNTHPOOL_N > 0 else ""}'
+               f'{"_edgew" if EDGEW else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -416,7 +423,8 @@ def lowlight_augment(rgb, rng, gentle=False):
     return np.clip(out * tint, 0, 1).astype(np.float32)
 
 
-def ssi_gm_loss(pred, target):
+def ssi_gm_loss(pred, target, gm_w=None):
+    """SSI + multi-scale GM, optional per-image GM weights (Phase A2)."""
     """SSI (lstsq scale+shift align + MAE) + multi-scale Sobel-grad L1.
 
     GMSCALES env (default "1.0" = legacy single-scale): gradient term
@@ -460,7 +468,12 @@ def ssi_gm_loss(pred, target):
         ga = F.conv2d(A, Kx, padding=1).abs() + F.conv2d(A, Ky, padding=1).abs()
         gt = F.conv2d(Tt, Kx, padding=1).abs() + F.conv2d(Tt, Ky,
                                                           padding=1).abs()
-        gm_terms.append((((ga - gt).abs()) * M).sum() / M.sum().clamp_min(1.0))
+        gmap = ((ga - gt).abs()) * M
+        if gm_w is not None:
+            Wm = gm_w.view(B, *([1] * (gmap.dim() - 1))).to(gmap.dtype)
+            gm_terms.append((gmap * Wm).sum() / (M * Wm).sum().clamp_min(1.0))
+        else:
+            gm_terms.append(gmap.sum() / M.sum().clamp_min(1.0))
     gm = torch.stack(gm_terms).mean()
     return mae + 2.0 * gm, mae.detach(), gm.detach()
 
@@ -587,6 +600,17 @@ def main():
           flush=True)
 
     labels = build_labels(shared, fit_pairs)
+    edge_w = None
+    if EDGEW:
+        # per-image GM weights from input edge stat (deterministic).
+        from strata import profile as _prof
+        es = np.array([_prof(rgb)["edge"] for rgb, _ in fit_pairs],
+                      dtype=np.float64)
+        med = float(np.median(es))
+        edge_w = torch.from_numpy(
+            np.clip(es / max(med, 1e-12), 0.1, 2.0).astype(np.float32))
+        print(f"edgew: median edge={med:.4f}, "
+              f"w range [{edge_w.min():.2f},{edge_w.max():.2f}]", flush=True)
     groups = [{"params": student.parameters(), "lr": args.lr}]
     if student.late_parameters():
         groups.append({"params": student.late_parameters(), "lr": LATE_LR})
@@ -685,7 +709,8 @@ def main():
                 ds_loss = None
             fused = _neck(fmaps)
             pred = shared['head']([fused[3]], ph, pw)
-            loss, mae, gm = ssi_gm_loss(pred, tgt)
+            loss, mae, gm = ssi_gm_loss(
+                pred, tgt, edge_w[idx] if edge_w is not None else None)
             if ds_loss is not None:
                 loss = loss + DEEPSUP * ds_loss
             opt.zero_grad()

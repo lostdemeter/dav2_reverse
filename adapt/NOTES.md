@@ -2057,3 +2057,10 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   get ~0 GM, textured get full). Predicts E0 holds >=0.988
   AND overall returns >=0.997 (both bars together, for real
   this time). Flat -> loss design exhausted, Phase C.
+
+## 2026-09-24 — PRE-REGISTERED Phase A2 (edge-weighted GM)
+
+- A1+gms-full+synthpool100 + per-image GM weight =
+  clip(edge/median, 0.1, 2.0), MAE unweighted. Predicts E0
+  holds >=0.988 AND overall returns >=0.997 (both bars
+  together). Flat -> loss design exhausted, Phase C.
