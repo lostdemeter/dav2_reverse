@@ -128,11 +128,14 @@ def main():
             load_base()  # reset: trials independent
             with torch.no_grad():
                 for li in LAYERS:
-                    A, _, _ = student.factors[(li, 'mlp1.weight')]
+                    # Kill GeLU OUTPUT channel c: row c of W1 (=B[c,:]@A)
+                    # and bias b[c], so the channel output is identically 0.
+                    _, B, b = student.factors[(li, 'mlp1.weight')]
                     ch = (order[li][:k] if side == "quiet"
                           else order[li][::-1][:k])
-                    A[:, torch.tensor(ch.tolist(),
-                                      device=device)] = 0.0
+                    idx = torch.tensor(ch.tolist(), device=device)
+                    B[idx, :] = 0.0
+                    b[idx] = 0.0
             mean = gate(f"{side}-{k}")
             results["ablations"][f"{side}-{k}"] = round(mean, 5)
     load_base()  # leave model untouched
