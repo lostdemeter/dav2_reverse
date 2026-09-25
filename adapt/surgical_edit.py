@@ -152,8 +152,13 @@ def main():
                     Wnew = B @ A + D[:-1, :].T
                     bnew = b + D[-1, :]
                     U, Sv, Vh = np.linalg.svd(Wnew, full_matrices=False)
-                    Ap = (U[:, :RANK] * Sv[:RANK]).T
-                    Bp = Vh[:RANK].T
+                    # Wnew is (do,di); want B'(do,r) A'(r,di) with B'A'=Wnew_r
+                    Ap = (Sv[:RANK, None] * Vh[:RANK, :])
+                    Bp = U[:, :RANK]
+                    rec = Bp @ Ap
+                    rel = (float(np.linalg.norm(rec - Wnew)) /
+                           max(float(np.linalg.norm(Wnew)), 1e-12))
+                    assert rel < 1e-4, f"refactor fail L{li}/{nm}: rel={rel}"
                     At, Bt, bt = student.factors[(li, SHORT2BUF[nm])]
                     At.copy_(torch.from_numpy(Ap.astype(np.float32))
                              .to(device))
