@@ -2262,3 +2262,14 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   ops look dead at every granularity tried. The language, if
   it exists, is writable only at training time (joint
   optimization preserves floors; isolated moves cannot).
+
+## 2026-09-25 — PRE-REGISTERED H3 (loud-vs-quiet ablation, gatekeeper)
+
+- Theory: dead channels carry cancellation info (§4.7: 42.4%
+  energy via destructive interference; §6.7: dark-fringe
+  removal collapses argmax). Test on Phase-E student L0-2
+  GeLU: zero top-k vs bottom-k by energy (k=32,128;
+  calibration on 6 fit scenes), 54-gate damage compared.
+- Holographic prediction: quiet-k damage >= loud-k (or
+  comparable despite ~0 energy). Null: loud >> quiet ->
+  analogy strained, stop before H1/H2.
