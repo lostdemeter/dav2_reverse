@@ -2367,3 +2367,16 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   language exists as JOINT moves (chords-not-notes reframes
   G entirely). Flat (audit-1 unmoved, mean ~0.9979) -> biases
   lack the degrees of freedom; go wider or concede scope.
+
+## 2026-09-25 — OUTCOME joint-bias: flat at 0.99787 (chords fail too)
+
+- 7k biases jointly, banked start, 100 epochs: gate frozen
+  at 0.99784-0.99787 all run (best ep4 0.99787, audit-1 never
+  above 0.98871). Loss flat 0.136 throughout — gradients ~0,
+  nothing to optimize. NOT slow convergence: stationarity.
+- Chords fail exactly where notes failed. Biases — singly or
+  jointly — lack useful DOF at this optimum. The compiled-
+  program edit language has no alphabet at bias granularity,
+  greedy or joint. Next rung (single full map class, e.g.
+  all-mlp2, joint) is the last scope before conceding edits
+  entirely; pre-register on launch, not now.
