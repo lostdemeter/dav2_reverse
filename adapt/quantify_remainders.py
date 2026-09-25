@@ -39,8 +39,9 @@ def main():
     import torch
     import re as _re
     import os as _os
-    _rm = _re.search(r'_r(\d+)', CKPTS[0])
-    _os.environ['STUDENT_RANK'] = _rm.group(1)
+    _only = _os.environ.get('QUANT_RANK_ONLY')
+    _rm = _re.search(r'_r(\d+)', CKPTS[0][0])
+    _os.environ['STUDENT_RANK'] = _only or _rm.group(1)
     from run_search import load_shared, load_fixtures
     from depth_adapter import run_pipeline, corr as _corr, SEED_CONFIG
     from student_grad import StudentBackbone
