@@ -2187,3 +2187,22 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   improve slightly; overdone -> noise everywhere (min drops).
 - Framework discussion only AFTER F1/F2 verdicts (no premature
   optimization — user directive).
+
+## 2026-09-25 — OUTCOME F1: surgical edit FAILS (clean, informative)
+
+- Residual-corrective deltas on audit-1, all lambdas: best
+  lam=10 audit-1=0.9839 (< 0.98869 base), gate 0.99174;
+  lam=0.01 destroys everything (audit-1 0.26, gate 0.51).
+  Monotonic in lambda toward base, never above it.
+  Prediction (audit-1 >=0.995) fails decisively.
+- Mechanism (read off trunc table): |D|/|W| = 0.3-0.96 —
+  the residual demands deltas nearly as large as the weights
+  themselves. No SMALL corrective edit exists: audit-1's
+  block outputs live far from fit scenes in activation space,
+  so any delta big enough to fix it breaks the other 60
+  (rank truncation, rel up to 0.39, compounds it).
+- Finding: student errors are DISTRIBUTED, not locally
+  editable within rank capacity. Consistent with the dense/
+  irreducible theme: corr 0.989 hides weight-space distance.
+  Framework implication (for later): edits need either full-
+  rank freedom or a different basis than per-map deltas.
