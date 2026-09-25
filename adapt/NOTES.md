@@ -2273,3 +2273,21 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Holographic prediction: quiet-k damage >= loud-k (or
   comparable despite ~0 energy). Null: loud >> quiet ->
   analogy strained, stop before H1/H2.
+
+## 2026-09-25 — OUTCOME H3: null wins, stop (analogy strained)
+
+- quiet-32: 0.99696 (drop 0.0009) vs loud-32: 0.99313 (drop
+  0.0048); quiet-128: 0.99587 (drop 0.0020) vs loud-128:
+  0.98701 (drop 0.0109). Damage ∝ energy removed (~5x ratio
+  both ks); per-unit-energy damage comparable. Standard view
+  holds — no holographic excess.
+- Worse for transfer: our quiet-128 carries 3.0% of energy;
+  the theory's dark fringe carried 42.4%. Different regimes,
+  not just different outcomes. DAV2 MLP channels show none
+  of the holographic energy signature.
+- Per pre-registration: STOP before H1/H2. Caveat (kept
+  narrow): this tests energy-ablation, not phase structure
+  directly — the claim killed is the transferable prediction
+  (dead channels matter disproportionately), not interference
+  anywhere. F1/F2/G stand as re-read: locality failures, now
+  without holographic cover.
