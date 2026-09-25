@@ -2092,3 +2092,16 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Remaining: Phase D certificate (margin-gated parity per
   stratum — E0 0.9938 vs seed-calibrated margin ~0.0003 will
   NOT tie; the certificate documents nearest-equivalent).
+
+## 2026-09-24 — OUTCOME Phase D: 7/31 certificate (nearest-equivalent)
+
+- Margin m=0.000270 (seed range, blind, per rule): 7/31
+  scenes tie; no stratum fully ties (best 2/3). Gaps sized
+  per scene in certificate.json (E0 worst, expected).
+- The certificate IS the nearest-equivalent documentation:
+  parity holds on 7 scenes, near-parity (millipoints) on
+  most reals, centipoint gaps on E0/dark. The margin rule
+  was designed to resolve exactly this; it did.
+- Gap-closure program CLOSED. Ledger: A1 0.99702 / B trade /
+  AxB E0-best / A2 E0-fixed-0.994 / C 0.99726+both-bars / D
+  7/31. Remaining: bank Phase-C best (encode) or new ideas.
