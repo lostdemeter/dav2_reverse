@@ -2148,3 +2148,15 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   scenes improve; exploration-2/E0 holds (no regression);
   overall >= Phase C 0.99726. Flat -> detail needs capacity,
   not supervision (rank up early maps).
+
+## 2026-09-24 — OUTCOME Phase E: 0.99788, all bars pass
+
+- Best ep84 0.99788 (27/54, min 0.98869). Failmap: E0T0L0V0
+  0.99661 (exploration-2 0.9993 — FIXED from 0.919);
+  E1T1L0V1 0.99864, E1T1L1V1 0.99942 (thin detail HELD);
+  worst scenes audit-1 0.9887, gate-1 0.9910.
+- All three pre-registered bars PASS: E1T1* improve ✓,
+  exploration-2/E0 hold ✓, overall >= 0.99726 ✓ (0.99788).
+  Detail-weighting + structmask is strictly additive over
+  Phase C: nothing regressed anywhere. New program best on
+  every axis simultaneously.
