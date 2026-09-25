@@ -2171,3 +2171,19 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   webcam number tracks scene regime, as established.
 - structmask/detailw did not target dark scenes; dark thread
   remains closed with limitation accepted.
+
+## 2026-09-25 — PRE-REGISTERED Phase F (direct weight surgery)
+
+- Weights backed up (~/dav2_weight_backup_20260925, 409M,
+  sha256 manifest); tree clean + pushed. Edits run on live
+  copies, rebuild never needed.
+- F1 (residual-corrective edit): audit-1 (0.9887, worst) —
+  teacher-vs-student block residuals at L0-2 maps, constrained
+  least-squares delta per map (correct target, pin 60 fit
+  scenes via cached covariances), re-factorized to rank-192.
+  Predicts: audit-1 >=0.995, 54-gate mean unmoved.
+- F2 (singular detail-gain knob): scale trailing singular
+  values in early maps x1.5/x2. Predicts: thin-detail scenes
+  improve slightly; overdone -> noise everywhere (min drops).
+- Framework discussion only AFTER F1/F2 verdicts (no premature
+  optimization — user directive).
