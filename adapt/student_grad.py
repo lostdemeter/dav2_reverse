@@ -622,6 +622,17 @@ def main():
 
     student = StudentBackbone(shared['backbone'])
     student.rrr_init(covs)
+    # Trace mode (sequentiality probe): per-scene corrs + per-layer/map
+    # factor drift from init, recorded at every gate eval.
+    TRACE = __import__('os').environ.get('STUDENT_TRACE', '') == '1'
+    trace_rows = []
+    init_snap = None
+    if TRACE:
+        with torch.no_grad():
+            init_snap = {
+                k: tuple(p.detach().cpu().clone() for p in tup)
+                for k, tup in student.factors.items()}
+        print("trace: init snapshot taken", flush=True)
     npars = sum(p.numel() for p in student.parameters())
     print(f"trainable params: {npars} "
           f"({sum(v.numel() for v in shared['backbone']._w.values())} total)",
@@ -666,17 +677,51 @@ def main():
 
     def gate(tag):
         cs = []
+        recs = []
+        medians = None
+        if TRACE:
+            from strata import profile as _tprof, assign as _tassign
+            import json as _tjson
+            medians = _tjson.load(
+                open(ADAPT / 'runs' / 'strata.json'))['medians']
         for rgb, ref, cid in eval_scenes:
             fmaps, ph, pw = student.forward_backbone(
                 shared['preprocess'](rgb).to(device))
             with torch.no_grad():
                 fused = _neck(fmaps)
                 d = shared['head']([fused[3]], ph, pw).squeeze(0).cpu().numpy()
-            cs.append(_corr(d, ref))
+            c = _corr(d, ref)
+            cs.append(c)
+            if TRACE:
+                recs.append((cid, _tassign(_tprof(rgb), medians),
+                             round(float(c), 6)))
+            else:
+                recs.append((cid, round(float(c), 6)))
         mean, mn = float(np.mean(cs)), float(min(cs))
         ok = sum(c >= 0.999 for c in cs)
         print(f"[gate {tag}] mean={mean:.5f} min={mn:.5f} pass={ok}/{len(cs)}",
               flush=True)
+        if TRACE:
+            # per-layer + per-map factor drift from init snapshot
+            drift_layer, drift_map = {}, {}
+            with torch.no_grad():
+                for (li, m), tup in student.factors.items():
+                    init = init_snap[(li, m)]
+                    num, den = 0.0, 0.0
+                    for p, q in zip(tup, init):
+                        d = (p.detach().double().cpu().numpy()
+                             - q.double().cpu().numpy())
+                        num += float((d ** 2).sum())
+                        den += float((q.double().cpu().numpy() ** 2).sum())
+                    drift_map[f"{li}/{m}"] = round(
+                        float(np.sqrt(num / max(den, 1e-30))), 6)
+                    a, b = drift_layer.get(li, (0.0, 0.0))
+                    drift_layer[li] = (a + num, b + den)
+            drift_layer = {str(li): round(float(np.sqrt(a / max(b, 1e-30))), 6)
+                           for li, (a, b) in drift_layer.items()}
+            trace_rows.append({"tag": tag, "mean": round(mean, 6),
+                               "scenes": recs, "drift_layer": drift_layer,
+                               "drift_map": drift_map})
         if AUGLOW or DARKPOOL_N > 0:
             # dark-eval (report-only): student-vs-teacher on darkened
             # eval scenes — the webcam failure regime.
@@ -768,6 +813,13 @@ def main():
                             "late_layers": LATE_LAYERS}, BEST)
                 print(f"  best saved: {best:.5f} -> {BEST}", flush=True)
     print(f"GRAD: best held-out mean={best:.5f}")
+    if TRACE:
+        import json as _json
+        tpath = ADAPT / 'runs' / 'trace.jsonl'
+        with open(tpath, 'w') as f:
+            for row in trace_rows:
+                f.write(_json.dumps(row, default=str) + "\n")
+        print(f"trace: wrote {len(trace_rows)} rows -> {tpath}", flush=True)
 
 
 if __name__ == '__main__':

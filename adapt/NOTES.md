@@ -2291,3 +2291,15 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   (dead channels matter disproportionately), not interference
   anywhere. F1/F2/G stand as re-read: locality failures, now
   without holographic cover.
+
+## 2026-09-25 — PRE-REGISTERED trace run (sequentiality probe)
+
+- Instrumented training (STUDENT_TRACE=1): per-scene corrs +
+  per-layer/map factor drift from init at every gate eval.
+  Phase-E recipe (rank-192 + all levers, cosine 100ep).
+- Predicts: (a) scenes flip fail->pass in difficulty order
+  (high-edge reals early, smooth E0 late); (b) layers
+  stabilize in depth order (L0 reaches 90%-of-final drift
+  before L2 — matches A-seq direction). Null: simultaneous
+  flips, no layer order -> training is parallel; kill the
+  sequentiality claim.
