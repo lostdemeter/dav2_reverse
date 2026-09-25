@@ -22,9 +22,14 @@ sys.path.insert(0, str(ADAPT))
 import numpy as np
 import json
 import copy
+import os
 
-BANK_CKPT = ADAPT / 'runs' / 'student_grad_best_r128_cos.pt'
-BANK_TAG = 'r128-cos0.99624'
+# Parametrize (bank any checkpoint; default = Phase-C best):
+#   BANK_CKPT=/path/to.pt BANK_TAG=mytag python adapt/bank_student.py
+BANK_CKPT = Path(os.environ.get(
+    'BANK_CKPT',
+    str(ADAPT / 'runs' / 'student_grad_best_r192_ds0.1_gms1p0_0p5_0p25_synthpool100_edgew_cos.pt')))
+BANK_TAG = os.environ.get('BANK_TAG', 'r192-phaseC0.99726')
 LAYERS = (0, 1, 2)
 MAPS = ("q.weight", "k.weight", "v.weight", "proj.weight",
         "mlp1.weight", "mlp2.weight")
