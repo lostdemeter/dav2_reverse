@@ -2112,3 +2112,15 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   8M student params phi-encoded): 12-scene subset 0.99734 /
   min 0.98688. Receipt adapt/runs/student_banked.json.
   Bank script now parametrized (BANK_CKPT/BANK_TAG env).
+
+## 2026-09-24 — Banked Phase-C + upstream branch pushed
+
+- Bank: weights/student_backbone_r192-phaseC0.99726.npz
+  (drop-in, 41.7MB-ish class) at 0.99734/0.98688 phi-parity;
+  script parametrized (BANK_CKPT/BANK_TAG).
+- Upstream: `feature/baseline-gate` pushed to
+  lostdemeter/adaptation_foundry (NOT merged): optional
+  Experimenter baseline_gate + 5 BaselineGateTests (73/73
+  green) + docs/proposals/margin-gates.md follow-up.
+  PR itself needs opening (no gh CLI here) — compare URL:
+  github.com/lostdemeter/adaptation_foundry/compare/main...feature/baseline-gate
