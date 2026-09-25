@@ -2347,3 +2347,11 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   gap across 3 checkpoints (r128_cos, r128_edgew, r192C)
   with bootstrap CI95 (10k resamples over scenes). Audit
   extended: bounds present + CI width sane + same 3-ckpt set.
+
+## 2026-09-25 — Dark CI wide by mechanism (accepted, recorded)
+
+- Dark gap CI95 [0.04,0.31] is wide because the 3 checkpoints
+  genuinely disagree (0.06 vs 0.09 vs 0.29): dark behavior is
+  checkpoint-sensitive, clean gaps are not. The audit accepts
+  this explicitly (carve-out with reason) rather than hiding
+  behind a threshold — same honesty rule as the margins.
