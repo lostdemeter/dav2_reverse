@@ -2064,3 +2064,17 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   clip(edge/median, 0.1, 2.0), MAE unweighted. Predicts E0
   holds >=0.988 AND overall returns >=0.997 (both bars
   together). Flat -> loss design exhausted, Phase C.
+
+## 2026-09-24 — OUTCOME A2: E0 FIXED (0.994), overall 0.99682
+
+- Best 0.99682 (ep64, 17/54). E0T0L0V0 0.99383 (was 0.982);
+  exploration-2 0.9907 (was 0.919) — E0 bars PASS, mechanism
+  (per-scene GM weighting resolves edge/smooth tension)
+  CONFIRMED. Overall misses 0.997 by 0.0002 (within run
+  noise of A1's 0.99702, stated).
+- Scoreboard: A1 overall 0.99702 / E0 0.982; A2 overall
+  0.99682 / E0 0.994. Each fixes what the other breaks.
+- Next (Phase C, residue exists): rank-192 + edgeweight +
+  synthpool — capacity for the union. Pre-registered: E0
+  holds >=0.99 AND overall >=0.99702 (beats both parents).
+  Flat -> accept nearest-equivalent, run Phase D certificate.
