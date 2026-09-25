@@ -2303,3 +2303,22 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   before L2 — matches A-seq direction). Null: simultaneous
   flips, no layer order -> training is parallel; kill the
   sequentiality claim.
+
+## 2026-09-25 — OUTCOME trace run (sequentiality probe): NULL, kill claim
+
+- 21 rows, best 0.99757. Scene flips: 16 pass at init, then a
+  1-2-per-gate trickle through ep89 with NO stratum ordering
+  (median-first-pass meaningless at n=1-2 per stratum). Stuck
+  scenes are ALL fixtures (gate-0..3, audit-0..3 never pass);
+  only holds flip. No difficulty-ordered sequence.
+- Layer drift: L0/L1/L2 all hit 90%-of-final at ep44 —
+  identical. No depth order (magnitudes differ slightly:
+  L2 0.046 > L0 0.034, deeper moves more, but simultaneously).
+- Consolation finding (map level): mlp2 moves most in every
+  layer (0.06-0.08), k-matrices least (0.017-0.026), q/v/proj/
+  mlp1 middle. Routing (keys) is right from RRR init; gradient
+  polish = output-mixing adjustments. Consistent across L0-2.
+- Verdict per pre-registration: training has NO internal
+  arrow at scene or layer level — parallel, not sequential.
+  A-seq's advantage was conditioning, not order. C's reshape
+  step stays atomic. Theory note updated accordingly.

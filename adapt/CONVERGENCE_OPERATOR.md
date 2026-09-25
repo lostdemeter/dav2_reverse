@@ -1,8 +1,13 @@
 # The Convergence Operator: diagnosis-to-retraining as one geometric operation
 
-Status: DRAFT theory note (dav2 program). Not yet proposed upstream.
+Status: DRAFT v2 theory note (dav2 program). Not yet proposed upstream.
 Companion to phi_lattice §6 (navigation paradigm); proposes the
 learning operator that paradigm implies but does not write down.
+
+v2 changes: move alphabet enumerated (§5 rewritten); refusal
+instances now six incl. H3 theory-stop; float-honesty correction
+(§5); F admission criteria (§6); F* resting-state semantics (§7);
+trace null — reshape stays atomic (§8).
 
 ---
 
@@ -47,7 +52,7 @@ No accepted turn in program history ever grew F. Every guard in the
 system (dissolution evidence-guard, margin refusals, EfficiencyRule
 tie-handling, λ-sweep monotonicity) exists to enforce exactly this.
 
-## 3. Refusal semantics (three instances, one rule)
+## 3. Refusal semantics (six instances, one rule)
 
 When no repertoire move empties anything, C returns (W, F) unchanged.
 Refusal is correct behavior — fixed-point detection at the current
@@ -63,6 +68,16 @@ repertoire — not failure:
    0.984 < 0.98869) across λ. The operator declines to move;
    trunc table (|D|/|W| up to 0.96) shows why: the destination is
    not reachable by small moves — a wall, not a road.
+4. **F2 SV scaling:** monotonic destruction (1.25× → −0.001,
+   2.0× → −0.04 with a −0.30 crater). Trailing directions are not
+   suppressed detail; scaling them scales damage.
+5. **Phase G 0/324:** bias immediates move the mean ±1e-5 yet
+   break floors almost everywhere. Sharp joint optimum, no slack
+   for greedy single moves.
+6. **H3 theory-stop:** loud-vs-quiet ablation favored the null
+   (~5x damage ratio both ks) — work on H1/H2 declined *before*
+   building. Second-order refusal: the operator governs ideas,
+   halting construction on falsified imports.
 
 ## 4. Repertoire sets the ceiling
 
@@ -77,40 +92,72 @@ reachable. F2's destruction under trailing-SV amplification is the
 same statement from below: directions outside the reachable set
 cannot be recruited by scaling.
 
-## 5. Lattice-native reading of move types
+## 5. Move alphabet (lattice-native) + float-honesty correction
 
 Without φ-coordinates, C is search-with-gates (true but shallow).
-With them, every move type is a lattice motion:
+With them, the repertoire is an enumerable alphabet of lattice
+motions — this is what makes "reshape" a defined operation rather
+than a black box:
 
-- **RRR init** = projection onto a measured activation subspace.
-  Closed-form, ~40 scenes, 0.99 before epoch 0.
-- **Rank** = subspace dimension (see §4).
-- **Loss/data changes** = reshaping which paths exist in the
-  navigated space (edge-weighting, detail-boost, regime coverage
-  alter arrival verdicts per stratum — measured, not metaphorical).
-- **Gates** = arrival checks with integer-exact meters (corr,
-  margins from seed variance, bit-exact C suite).
+- **PROJECT** (RRR init): closed-form projection onto the measured
+  activation subspace. ~40 scenes, 0.99 before epoch 0.
+- **EXPAND** (rank): subspace dimension; sets the ceiling (§4).
+- **REWEIGHT** (loss changes): alter which arrivals verify —
+  edge-weighting, detail-boost, multi-scale GM (measured per
+  stratum, not metaphorical).
+- **COVER** (data changes): alter which strata exist to arrive
+  at — synthpool, darkpool, holdout discipline.
+- **VERIFY** (gates): arrival checks with integer-exact meters
+  (corr, margins from seed variance, bit-exact C suite).
 
-"Move the weights" and "move on the lattice" are the same sentence
+Honesty correction (v2): the gradient polish happens in *float*
+factor space, not on the lattice. Quantitatively: lattice-native
+init does ~0.99 of the work exact (projection), float gradients
+add ~+0.004. The division is itself a finding — the geometric
+part of training is closed-form; the float part is small
+corrections. "Move the weights and move on the lattice are the
+same sentence" holds for 99% of the result, not 100%.
+
+"Move the weights and move on the lattice are the same sentence"
 *only* because weights are lattice positions. That is the precise
 sense in which the lattice upgrades the loop from methodology (§6.5's
 checklist: represent → study → compare → understand → modify) to a
 closed operator with a halting predicate.
 
-## 6. Stress test: the dark thread (hardest case)
+## 6. F admission criteria
 
-Dark-eval oscillated 0.82–0.92 across v3/fraction runs without
-monotonic shrinkage — apparent contractivity violation. Resolution:
-contractivity holds on the **gated** failure set (clean gate held
-0.994–0.996 throughout; dark was report-only, never a gate
-verdict). Ungated observations may oscillate freely. Refinement to
-the conjecture: **C contracts F_gated; what counts as F is load-
-bearing.** A regime enters F iff it is gated; the dark limitation
-was *accepted* (documented, not fixed) precisely because promoting
-it to F would have broken contraction with no repertoire move to
-restore it. The acceptance, not just the fixes, is operator behavior.
+The dark thread plus H3 jointly imply: a regime enters F iff it is
+both *measured* and *gated*. Dark-eval oscillated freely because it
+was report-only, never a gate verdict; holography was refused *at
+the door* (transfer falsified before construction). Ungated
+observations may oscillate; unverified imports get refused before
+entering. What counts as F is load-bearing: promoting dark to F
+would have broken contraction with no repertoire move to restore
+it. The acceptance, not just the fixes, is operator behavior.
 
-## 7. Open questions
+## 7. Achievable fixed points (F* resting-state semantics)
+
+F = ∅ is unreachable — dark accepted, 7/31 certified. Convergence
+in practice means F* = irreducible remainder, and a remainder is a
+legitimate resting state *iff* it carries a mechanism, not a shrug:
+dark (regime competition, measured) counts; E0 did not count as
+resting — it got fixed. This partially answers the certificate
+question: partial-strata convergence is a converged state when the
+remainder is characterized (gap sizes, mechanisms, per-scene
+receipts in certificate.json), interim otherwise.
+
+## 8. Reshape stays atomic (trace null, 2026-09-25)
+
+Instrumented training (per-scene corrs + per-layer/map drift at
+21 gates): scene flips show no stratum ordering (all fixtures stuck,
+only holds flip, trickle through ep89); layers hit 90%-of-final
+drift simultaneously (L0/L1/L2 all ep44). No internal arrow at
+scene or layer level — A-seq's advantage was conditioning, not
+order. C's reshape step stays atomic; no triangular decomposition.
+Consolation finding: mlp2 moves most in every layer, k-matrices
+least — routing is right from RRR init, polish adjusts mixing.
+
+## 9. Open questions
 
 1. Is refusal *detectable a priori* (required-delta vs pinned
    subspace, as F1 suggests) rather than only by attempted move?
@@ -118,6 +165,5 @@ restore it. The acceptance, not just the fixes, is operator behavior.
    needed; generality unclaimed)?
 3. Can repertoire be *grown* endogenously (the operator proposing
    its own move types — cf. the retired proposer, which blobbed)?
-4. Certificate semantics: Phase D's 7/31 under margin 0.00027 is a
-   partial fixed point. Is "converged on subset S of strata" a
-   legitimate resting state of C, or must F be global?
+4. (Partially answered, §7): resting-state legitimacy criteria —
+   mechanism-carrying remainders vs shrugs. Needs a second instance.
