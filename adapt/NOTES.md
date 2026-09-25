@@ -2160,3 +2160,14 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   Detail-weighting + structmask is strictly additive over
   Phase C: nothing regressed anywhere. New program best on
   every axis simultaneously.
+
+## 2026-09-24 — Webcam sanity Phase-E best: 0.918, scene-dependent
+
+- Dark emissive desk scene (monitor glow, RGB LEDs, cables):
+  student-vs-teacher 0.89-0.94 (mean 0.918), student-vs-HF
+  0.86-0.90. Same accepted dark limitation as before (near-
+  black + emissive colors absent from fit); NOT a regression
+  — Phase-C live run hit 0.995 in brighter conditions. The
+  webcam number tracks scene regime, as established.
+- structmask/detailw did not target dark scenes; dark thread
+  remains closed with limitation accepted.
