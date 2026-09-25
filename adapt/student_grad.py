@@ -74,7 +74,16 @@ GMSCALES_TAG = "_".join(str(x).replace('.', 'p') for x in GMSCALES)
 # want fine GM, smooth scenes want it gone). STUDENT_EDGEW=1 enables;
 # weights precomputed once (deterministic), MAE stays unweighted.
 EDGEW = __import__('os').environ.get('STUDENT_EDGEW', '') == '1'
-GMSCALES_TAG = "_".join(str(x).replace('.', 'p') for x in GMSCALES)
+# Phase E (detail-weighted loss): the webcam falloff diagnosis —
+# thin structures vanish (bottleneck low-pass + Sobel-L1 blind to
+# 2px cables + top-10% mask drops exactly the detail-error pixels).
+# STUDENT_DETAILW=1: per-pixel GM weight UP where the teacher has
+# fine structure (symmetric completion of edge-weighting, which
+# only turned GM DOWN on smooth scenes). STUDENT_STRUCTMASK=1:
+# never mask high-teacher-gradient pixels (keeps noise rejection
+# without deleting the detail signal).
+DETAILW = __import__('os').environ.get('STUDENT_DETAILW', '') == '1'
+STRUCTMASK = __import__('os').environ.get('STUDENT_STRUCTMASK', '') == '1'
 LABEL_CACHE = ADAPT / 'runs' / 'grad_labels.npz'
 BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{"_ul" + "-".join(map(str, LATE_LAYERS)) if LATE_LAYERS else ""}'
@@ -86,7 +95,9 @@ BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{f"_f{DARKFRAC:g}" if DARKFRAC > 0 else ""}'
                f'{f"_gms{GMSCALES_TAG}" if GMSCALES != (1.0,) else ""}'
                f'{f"_synthpool{SYNTHPOOL_N}" if SYNTHPOOL_N > 0 else ""}'
-               f'{"_edgew" if EDGEW else ""}')
+               f'{"_edgew" if EDGEW else ""}'
+               f'{"_detailw" if DETAILW else ""}'
+               f'{"_structmask" if STRUCTMASK else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -424,13 +435,15 @@ def lowlight_augment(rgb, rng, gentle=False):
 
 
 def ssi_gm_loss(pred, target, gm_w=None):
-    """SSI + multi-scale GM, optional per-image GM weights (Phase A2)."""
     """SSI (lstsq scale+shift align + MAE) + multi-scale Sobel-grad L1.
 
     GMSCALES env (default "1.0" = legacy single-scale): gradient term
     averaged over downsampled copies (edge/texture structure is
     scale-dependent — our strata split on it). Top-10% residual mask
-    (downsampled per scale) throughout.
+    (downsampled per scale) throughout, unless STRUCTMASK keeps
+    structural pixels (Phase E). Per-image GM weights via gm_w
+    (Phase A2 edge-weighting); per-pixel detail boost via DETAILW
+    (Phase E): weight UP where the teacher has fine structure.
     """
     import torch
     import torch.nn.functional as F
@@ -455,6 +468,7 @@ def ssi_gm_loss(pred, target, gm_w=None):
     Kx = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
                       device=pred.device, dtype=pred.dtype).view(1, 1, 3, 3)
     Ky = Kx.transpose(-1, -2)
+    beta = float(__import__('os').environ.get('STUDENT_DETAILW_BETA', '1.0'))
     gm_terms = []
     for sc in scales:
         if sc == 1.0:
@@ -468,7 +482,21 @@ def ssi_gm_loss(pred, target, gm_w=None):
         ga = F.conv2d(A, Kx, padding=1).abs() + F.conv2d(A, Ky, padding=1).abs()
         gt = F.conv2d(Tt, Kx, padding=1).abs() + F.conv2d(Tt, Ky,
                                                           padding=1).abs()
+        if STRUCTMASK:
+            # never mask structural pixels: keep where teacher gradient
+            # is above its per-image median (scale-local)
+            gflat = gt.reshape(B, -1)
+            gthr = gflat.quantile(0.5, dim=1).view(B, 1, 1, 1)
+            M = torch.maximum(M, (gt >= gthr).float())
         gmap = ((ga - gt).abs()) * M
+        pw = None
+        if DETAILW:
+            # boost where the teacher has fine structure: 1 + beta *
+            # (teacher grad / its per-image mean), scale-local; clamped
+            # so near-flat images (tiny denominator) can't explode
+            gmean = gt.reshape(B, -1).mean(dim=1).view(B, 1, 1, 1)
+            pw = (1.0 + beta * gt / gmean.clamp_min(1e-12)).clamp_max(4.0)
+            gmap = gmap * pw
         if gm_w is not None:
             Wm = gm_w.view(B, *([1] * (gmap.dim() - 1))).to(gmap.dtype)
             gm_terms.append((gmap * Wm).sum() / (M * Wm).sum().clamp_min(1.0))

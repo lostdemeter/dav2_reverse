@@ -2135,3 +2135,16 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   history (0.767 -> 0.975 -> 0.991 -> 0.995 across runs).
 - Webcam arc corroborates the lab arc: fidelity climbs with
   the training program, dark extreme remains the known gap.
+
+## 2026-09-24 — PRE-REGISTERED Phase E (detail-weighted loss)
+
+- Webcam falloff: thin structures vanish (bottleneck low-pass +
+  Sobel-L1 blind to 2px cables + top-10% mask drops exactly the
+  detail-error pixels). Fix: DETAILW (per-pixel GM boost where
+  teacher has fine structure, symmetric completion of edgew) +
+  STRUCTMASK (never mask high-teacher-grad pixels).
+- Config: Phase-C recipe (rank-192, deepsup, gms, synthpool100,
+  edgew, cosine) + both flags. Predicts: E1T1* thin-structure
+  scenes improve; exploration-2/E0 holds (no regression);
+  overall >= Phase C 0.99726. Flat -> detail needs capacity,
+  not supervision (rank up early maps).
