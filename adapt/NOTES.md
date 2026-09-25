@@ -2105,3 +2105,10 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
 - Gap-closure program CLOSED. Ledger: A1 0.99702 / B trade /
   AxB E0-best / A2 E0-fixed-0.994 / C 0.99726+both-bars / D
   7/31. Remaining: bank Phase-C best (encode) or new ideas.
+
+## 2026-09-24 — Banked Phase-C best (0.99734 phi-parity)
+
+- weights/student_backbone_r192-phaseC0.99726.npz (drop-in;
+  8M student params phi-encoded): 12-scene subset 0.99734 /
+  min 0.98688. Receipt adapt/runs/student_banked.json.
+  Bank script now parametrized (BANK_CKPT/BANK_TAG env).
