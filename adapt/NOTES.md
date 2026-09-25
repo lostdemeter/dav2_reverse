@@ -2231,3 +2231,16 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   stress test (contracts F_gated; acceptance is operator
   behavior); 4 open questions. For upstream proposal only
   after in-repo review.
+
+## 2026-09-25 — PRE-REGISTERED Phase G (bias opcodes, ADD_IMM)
+
+- audit-1 attribution -> top-3 channels x 18 maps; bias steps
+  x(1+/-{0.001,0.005,0.01}); keep iff 54-mean rises AND no
+  scene below base floor. 324 trials, single sweep.
+- Predicts: millipoint gains on a handful of ops, or clean
+  refusal (zero keeps). Either maps the granularity where
+  surgery becomes possible.
+- Opcode brainstorm (future, unordered): weight-entry immediates;
+  SV-scale (F2 precedent: destructive); attention-bias reroute;
+  norm-scale tweaks; readout-mix coefficients; opcode COMPOSITION
+  (kept-op chaining with re-gating) only if singles ever keep.
