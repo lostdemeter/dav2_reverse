@@ -710,7 +710,8 @@ def main():
             fused = _neck(fmaps)
             pred = shared['head']([fused[3]], ph, pw)
             loss, mae, gm = ssi_gm_loss(
-                pred, tgt, edge_w[idx] if edge_w is not None else None)
+                pred, tgt, edge_w[idx].to(device)
+                if edge_w is not None else None)
             if ds_loss is not None:
                 loss = loss + DEEPSUP * ds_loss
             opt.zero_grad()
