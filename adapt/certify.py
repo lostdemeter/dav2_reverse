@@ -26,6 +26,11 @@ def main():
     ap.add_argument('--ckpt', default='adapt/runs/student_grad_best_r192_ds0.1_gms1p0_0p5_0p25_synthpool100_edgew_cos.pt')
     args = ap.parse_args()
     import torch
+    import re as _re
+    _m = _re.search(r'_r(\d+)', Path(args.ckpt).name)
+    if _m:
+        import os as _os
+        _os.environ['STUDENT_RANK'] = _m.group(1)
     from run_search import load_shared, load_fixtures
     from depth_adapter import run_pipeline, corr as _corr, SEED_CONFIG
     from student_grad import StudentBackbone
