@@ -27,6 +27,15 @@ RANDOM_INIT = __import__('os').environ.get('STUDENT_RANDOM_INIT', '') == '1'
 # Full-width mode: direct (W,b) Parameters per map, teacher-exact init.
 # No bottleneck, no RRR — isolates narrowing-vs-training causally.
 FULLWIDTH = __import__('os').environ.get('STUDENT_FULLWIDTH', '') == '1'
+# Map-class mode (shape-thesis test): dense trainable maps for the
+# named classes (e.g. STUDENT_MAPS="mlp2.weight"), init from banked
+# composed values, everything else frozen. If a single map class
+# moves audit-1, the missing information lives in its subspace and
+# the delta gets characterized (rank? novel directions?) against
+# phi_lattice primitives. Flat -> scope closed.
+MAPSEL = tuple(x.strip() for x in
+               __import__('os').environ.get('STUDENT_MAPS', '').split(',')
+               if x.strip() != '')
 # Joint-bias mode (chords-not-notes test): train ALL early biases
 # jointly from the banked Phase-E start, A/B frozen. Greedy singles
 # failed (Phase G 0/324); joint optimization may preserve floors
@@ -106,7 +115,8 @@ BEST_STEM = (f'student_grad_best_r{RANK}'
                f'{"_edgew" if EDGEW else ""}'
                f'{"_detailw" if DETAILW else ""}'
                f'{"_structmask" if STRUCTMASK else ""}'
-               f'{"_biasonly" if BIASONLY else ""}')
+               f'{"_biasonly" if BIASONLY else ""}'
+               f'{f"_mapsel-{'-'.join(m.split(chr(46))[0] for m in MAPSEL)}" if MAPSEL else ""}')
 BEST = ADAPT / 'runs' / (BEST_STEM + '.pt')  # may gain _cos suffix in main()
 
 
@@ -164,6 +174,28 @@ class StudentBackbone:
             print("FULLWIDTH mode (teacher-exact init, no bottleneck)",
                   flush=True)
 
+        # Map-class dense maps (shape-thesis test): full-rank
+        # trainable copies for the named classes, init from banked
+        # composed values in init_banked. Empty = off.
+        self.mapsel = {}
+        if MAPSEL:
+            for li in STUDENT_LAYERS:
+                for m in MAPSEL:
+                    W = teacher._w[f'layer{li}.{m}'].detach().clone()
+                    bkey = f'layer{li}.{m.replace(".weight", ".bias")}'
+                    b = (teacher._w[bkey].detach().clone()
+                         if bkey in teacher._w else None)
+                    self.mapsel[(li, m)] = (
+                        torch.nn.Parameter(W),
+                        torch.nn.Parameter(b) if b is not None else None)
+            print(f"mapsel classes {list(MAPSEL)} "
+                  f"({sum(p.numel() for p in self.mapsel_parameters())} "
+                  f"params)", flush=True)
+
+    def mapsel_parameters(self):
+        return [p for tup in self.mapsel.values() for p in tup
+                if p is not None]
+
     def parameters(self):
         ps = [p for tup in self.factors.values() for p in tup]
         if FULLWIDTH:
@@ -172,6 +204,8 @@ class StudentBackbone:
         if BIASONLY:
             # biases only, A/B frozen (set requires_grad in init_banked)
             ps = [tup[2] for tup in self.factors.values()]
+        if MAPSEL:
+            ps = self.mapsel_parameters()
         return ps
 
     def late_parameters(self):
@@ -179,7 +213,8 @@ class StudentBackbone:
                 if p is not None]
 
     def init_banked(self, path=None):
-        """Load a banked checkpoint's factors (for BIASONLY start)."""
+        """Load a banked checkpoint's factors (for BIASONLY start);
+        also composes dense mapsel maps when MAPSEL is set."""
         import torch
         ckpt = torch.load(path or BIASONLY_INIT, map_location=self.device,
                           weights_only=False)
@@ -195,6 +230,13 @@ class StudentBackbone:
                 if BIASONLY:
                     A.requires_grad_(False)
                     B.requires_grad_(False)
+            if MAPSEL:
+                for li in STUDENT_LAYERS:
+                    for m in MAPSEL:
+                        A, B, b = self.factors[(li, m)]
+                        Wp, bp = self.mapsel[(li, m)]
+                        Wp.copy_(B @ A)
+                        bp.copy_(b)
 
     def rrr_init(self, covs):
         """Init factors from RRR solutions (skipped when RANDOM_INIT
@@ -379,6 +421,9 @@ class StudentBackbone:
         def _g(name):
             import re
             m = re.match(r'layer(\d+)\.(q|k|v|proj|mlp1|mlp2)\.weight', name)
+            if m and (int(m.group(1)), m.group(2) + '.weight') in self.mapsel:
+                return self.mapsel[(int(m.group(1)),
+                                    m.group(2) + '.weight')][0]
             if m and int(m.group(1)) in STUDENT_LAYERS:
                 if FULLWIDTH:
                     return self.full[(int(m.group(1)),
@@ -390,6 +435,11 @@ class StudentBackbone:
                 return self.late[(int(m.group(1)),
                                   m.group(2) + '.weight')][0]
             m = re.match(r'layer(\d+)\.(q|k|v|proj|mlp1|mlp2)\.bias', name)
+            if m and (int(m.group(1)), m.group(2) + '.weight') in self.mapsel:
+                mb = self.mapsel[(int(m.group(1)),
+                                  m.group(2) + '.weight')][1]
+                if mb is not None:
+                    return mb
             if m and int(m.group(1)) in STUDENT_LAYERS:
                 if FULLWIDTH:
                     fb = self.full[(int(m.group(1)),
@@ -651,8 +701,9 @@ def main():
     print("RRR covariances done.", flush=True)
 
     student = StudentBackbone(shared['backbone'])
-    if BIASONLY:
-        student.init_banked()  # banked Phase-E start, A/B frozen inside
+    if BIASONLY or MAPSEL:
+        # banked start (MAPSEL composes dense maps inside init_banked)
+        student.init_banked()
     else:
         student.rrr_init(covs)
     # Trace mode (sequentiality probe): per-scene corrs + per-layer/map

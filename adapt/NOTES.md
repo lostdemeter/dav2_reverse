@@ -2380,3 +2380,17 @@ generalize to adaptation_foundry as a library (flagged LIBRARY below).
   greedy or joint. Next rung (single full map class, e.g.
   all-mlp2, joint) is the last scope before conceding edits
   entirely; pre-register on launch, not now.
+
+## 2026-09-25 — PRE-REGISTERED map-class run (shape thesis test)
+
+- Shape thesis (user): a trained map class working means
+  missing information = a missing dimension, solvable via
+  phi_lattice primitives. STUDENT_MAPS="mlp2.weight": all
+  three L0-2 mlp2s as dense trainable maps from banked
+  composed values; everything else frozen. Same protocol.
+- Predictions: works (audit-1 >=0.995, no floors) -> the
+  information lives in mlp2 subspace; follow-up characterizes
+  the learned delta (rank? alignment with RRR span vs novel
+  directions = literal missing dimension?) against library
+  primitives. Flat (~0.9979) -> no single map class carries
+  it; scope question closed, concede edits.
